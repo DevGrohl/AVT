@@ -24,6 +24,10 @@ _Avoid_: Analysis JSON, project graph, generic graph dump
 A point where an Execution Flow communicates outside the analyzed code path, such as HTTP, database, or filesystem access.
 _Avoid_: Integration, dependency, side effect
 
+**Flow Marker**:
+Static evidence attached to an Execution Flow that highlights meaningful branch or outcome structure, such as conditionals, raises, and return patterns.
+_Avoid_: Behavioral tag, AI annotation, full control-flow path
+
 **Uncertain Edge**:
 A possible relationship in an Execution Flow that the tool cannot prove from static analysis alone. A Developer may resolve it manually or ignore it until higher-confidence analysis is available.
 _Avoid_: Guess, hallucination, inferred fact
