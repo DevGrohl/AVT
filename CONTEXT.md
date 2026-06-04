@@ -9,8 +9,12 @@ A person trying to understand an unfamiliar project or broader software system.
 _Avoid_: Architect, beta user, end user
 
 **Understanding Aid**:
-The primary product capability: helping a Developer explore what exists in a project or system and how parts relate.
+The primary product capability: helping a Developer explore what exists in a project or system and how parts relate, especially by following Execution Flows.
 _Avoid_: Documentation generator, documentation updater
+
+**Execution Flow**:
+A behavior path through a single repository, starting from an entrypoint and continuing through the meaningful calls, branches, and outcomes that explain how that behavior works.
+_Avoid_: Raw call graph, file map, system map
 
 **Documentation Aid**:
 A later product capability that helps improve documentation using insights discovered by the tool.
