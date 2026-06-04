@@ -20,6 +20,10 @@ _Avoid_: Raw call graph, file map, system map
 A point where an Execution Flow communicates outside the analyzed code path, such as HTTP, database, or filesystem access.
 _Avoid_: Integration, dependency, side effect
 
+**Uncertain Edge**:
+A possible relationship in an Execution Flow that the tool cannot prove from static analysis alone. A Developer may resolve it manually or ignore it until higher-confidence analysis is available.
+_Avoid_: Guess, hallucination, inferred fact
+
 **Entry Point**:
 A place where a Developer can begin exploring an Execution Flow. Early Entry Points include web route handlers, CLI commands, and executable scripts.
 _Avoid_: Entrypoint, start file, root node
