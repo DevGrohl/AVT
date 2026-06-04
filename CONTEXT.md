@@ -13,8 +13,12 @@ The primary product capability: helping a Developer explore what exists in a pro
 _Avoid_: Documentation generator, documentation updater
 
 **Execution Flow**:
-A behavior path through a single repository, starting from an Entry Point and continuing through the meaningful calls, branches, and outcomes that explain how that behavior works.
+A behavior path through a single repository, starting from an Entry Point and continuing through the meaningful calls, branches, External Interactions, and outcomes that explain how that behavior works.
 _Avoid_: Raw call graph, file map, system map
+
+**External Interaction**:
+A point where an Execution Flow communicates outside the analyzed code path, such as HTTP, database, or filesystem access.
+_Avoid_: Integration, dependency, side effect
 
 **Entry Point**:
 A place where a Developer can begin exploring an Execution Flow. Early Entry Points include web route handlers, CLI commands, and executable scripts.
