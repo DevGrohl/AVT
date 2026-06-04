@@ -10,5 +10,8 @@ node_modules/
 dist/
 build/
 
+# Pi local task/session state
+.pi/tasks/
+
 # AVT generated analysis output
 avt-graph.json

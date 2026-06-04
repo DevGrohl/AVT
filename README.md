@@ -6,6 +6,7 @@ See:
 
 - `CONTEXT.md` for project language.
 - `docs/restart-plan.md` for the restart plan.
+- `docs/development.md` for local development commands and conventions.
 - `docs/adr/` for architecture decisions.
 
 ## Monorepo layout
