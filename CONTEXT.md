@@ -13,8 +13,12 @@ The primary product capability: helping a Developer explore what exists in a pro
 _Avoid_: Documentation generator, documentation updater
 
 **Execution Flow**:
-A behavior path through a single repository, starting from an entrypoint and continuing through the meaningful calls, branches, and outcomes that explain how that behavior works.
+A behavior path through a single repository, starting from an Entry Point and continuing through the meaningful calls, branches, and outcomes that explain how that behavior works.
 _Avoid_: Raw call graph, file map, system map
+
+**Entry Point**:
+A place where a Developer can begin exploring an Execution Flow. Early Entry Points include web route handlers, CLI commands, and executable scripts.
+_Avoid_: Entrypoint, start file, root node
 
 **Documentation Aid**:
 A later product capability that helps improve documentation using insights discovered by the tool.
