@@ -24,6 +24,10 @@ _Avoid_: Integration, dependency, side effect
 A possible relationship in an Execution Flow that the tool cannot prove from static analysis alone. A Developer may resolve it manually or ignore it until higher-confidence analysis is available.
 _Avoid_: Guess, hallucination, inferred fact
 
+**Analysis Overlay**:
+Project-local knowledge that records a Developer's confirmations or rejections of Uncertain Edges so future analyses can reuse those decisions.
+_Avoid_: Global training data, source code modification, temporary UI state
+
 **Entry Point**:
 A place where a Developer can begin exploring an Execution Flow. Early Entry Points include web route handlers, CLI commands, and executable scripts.
 _Avoid_: Entrypoint, start file, root node
