@@ -5,19 +5,20 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
-from avt_analyzer.entrypoints import DiscoveryResult, EntryPointCandidate, FunctionInfo, ModuleInfo
-from avt_analyzer.schema import Certainty, EdgeKind, Evidence, FlowMarker, FlowMarkerKind, GraphEdge, SourceLocation
+from avt_analyzer.entrypoints import ClassInfo, DiscoveryResult, EntryPointCandidate, FunctionInfo, ModuleInfo
+from avt_analyzer.schema import Certainty, EdgeKind, Evidence, FlowMarker, FlowMarkerKind, GraphEdge, GraphNode, SourceLocation
 
 
 @dataclass(frozen=True)
 class FlowEdge:
     edge: GraphEdge
-    target: FunctionInfo
+    target: FunctionInfo | None
 
 
 @dataclass(frozen=True)
 class FlowAnalysisResult:
     edges: tuple[GraphEdge, ...]
+    external_nodes: tuple[GraphNode, ...]
     markers: tuple[FlowMarker, ...]
     flow_node_ids: dict[str, list[str]]
     flow_edge_ids: dict[str, list[str]]
@@ -30,6 +31,7 @@ def analyze_flows(discovery: DiscoveryResult, *, max_depth: int) -> FlowAnalysis
     context = _AnalysisContext(discovery)
     all_edges: dict[str, GraphEdge] = {}
     all_markers: dict[str, FlowMarker] = {}
+    all_external_nodes: dict[str, GraphNode] = {}
     flow_node_ids: dict[str, list[str]] = {}
     flow_edge_ids: dict[str, list[str]] = {}
     flow_marker_ids: dict[str, list[str]] = {}
@@ -50,6 +52,7 @@ def analyze_flows(discovery: DiscoveryResult, *, max_depth: int) -> FlowAnalysis
             markers=markers,
             all_edges=all_edges,
             all_markers=all_markers,
+            all_external_nodes=all_external_nodes,
         )
         flow_node_ids[entry.id] = sorted(nodes)
         flow_edge_ids[entry.id] = sorted(edges)
@@ -57,6 +60,7 @@ def analyze_flows(discovery: DiscoveryResult, *, max_depth: int) -> FlowAnalysis
 
     return FlowAnalysisResult(
         edges=tuple(edge for _, edge in sorted(all_edges.items())),
+        external_nodes=tuple(node for _, node in sorted(all_external_nodes.items())),
         markers=tuple(marker for _, marker in sorted(all_markers.items())),
         flow_node_ids=flow_node_ids,
         flow_edge_ids=flow_edge_ids,
@@ -72,6 +76,8 @@ class _AnalysisContext:
         self.functions_by_path = _functions_by_path(discovery.functions)
         self.functions_by_module_qualified_name = _functions_by_module_qualified_name(discovery.modules, discovery.functions)
         self.functions_by_name = _functions_by_name(discovery.functions)
+        self.classes_by_name = _classes_by_name(discovery.classes)
+        self.classes_by_module_qualified_name = _classes_by_module_qualified_name(discovery.modules, discovery.classes)
         self.import_aliases_by_path = _import_aliases_by_path(discovery)
 
 
@@ -88,6 +94,7 @@ def _walk_entry(
     markers: dict[str, None],
     all_edges: dict[str, GraphEdge],
     all_markers: dict[str, FlowMarker],
+    all_external_nodes: dict[str, GraphNode],
 ) -> None:
     if depth >= max_depth or function.node_id in active:
         return
@@ -98,9 +105,12 @@ def _walk_entry(
         all_markers.setdefault(marker["id"], marker)
 
     for flow_edge in _calls_from_function(context, function):
-        nodes[flow_edge.target.node_id] = None
+        nodes[flow_edge.edge["target"]] = None
         edges[flow_edge.edge["id"]] = None
         all_edges.setdefault(flow_edge.edge["id"], flow_edge.edge)
+        if flow_edge.target is None:
+            all_external_nodes.setdefault(flow_edge.edge["target"], _external_node_from_id(flow_edge.edge["target"]))
+            continue
         if flow_edge.edge["certainty"] == "confirmed":
             _walk_entry(
                 context,
@@ -114,6 +124,7 @@ def _walk_entry(
                 markers=markers,
                 all_edges=all_edges,
                 all_markers=all_markers,
+                all_external_nodes=all_external_nodes,
             )
     active.remove(function.node_id)
 
@@ -161,11 +172,14 @@ def _calls_from_function(context: _AnalysisContext, function: FunctionInfo) -> l
     calls = _collect_calls(function.node)
     edges: list[FlowEdge] = []
     seen: set[str] = set()
+    variable_types = _collect_variable_types(context, function)
     for call, is_await in calls:
         call_name = _dotted_name(call.func)
         if call_name is None:
+            call_name = _method_name(call.func)
+        if call_name is None:
             continue
-        targets = _resolve_call(context, function, call_name)
+        targets = _resolve_call(context, function, call_name, variable_types=variable_types)
         for target, certainty, reason_code, reason_label in targets:
             kind: EdgeKind = "await" if is_await else "call"
             edge = _build_edge(function, target, call, kind, certainty, reason_code, reason_label)
@@ -173,13 +187,34 @@ def _calls_from_function(context: _AnalysisContext, function: FunctionInfo) -> l
                 continue
             seen.add(edge["id"])
             edges.append(FlowEdge(edge=edge, target=target))
+
+        external_call_name = _expanded_call_name(context, function, call_name)
+        external = _external_interaction(external_call_name, call)
+        if external is not None and not targets:
+            category, reason_code, reason_label = external
+            target_node_id = _external_node_id(category, external_call_name)
+            edge = _build_external_edge(function, target_node_id, call, reason_code, reason_label)
+            if edge["id"] in seen:
+                continue
+            seen.add(edge["id"])
+            edges.append(FlowEdge(edge=edge, target=None))
     return sorted(edges, key=lambda item: item.edge["id"])
+
+
+def _expanded_call_name(context: _AnalysisContext, function: FunctionInfo, call_name: str) -> str:
+    first, separator, rest = call_name.partition(".")
+    alias = context.import_aliases_by_path.get(function.relative_path, {}).get(first)
+    if alias is None:
+        return call_name
+    return f"{alias}.{rest}" if separator else alias
 
 
 def _resolve_call(
     context: _AnalysisContext,
     function: FunctionInfo,
     call_name: str,
+    *,
+    variable_types: dict[str, str],
 ) -> list[tuple[FunctionInfo, Certainty, str, str]]:
     same_file = context.functions_by_path.get(function.relative_path, ())
     module = context.module_by_path[function.relative_path]
@@ -190,6 +225,19 @@ def _resolve_call(
         target = _find_qualified(same_file, f"{function.parent_qualified_name}.{method_name}")
         if target is not None:
             return [(target, "confirmed", "self_method_call", f"Resolved self.{method_name}() in current class")]
+
+    receiver, separator, method_name = call_name.partition(".")
+    if separator and receiver in variable_types:
+        method_targets = _resolve_method_targets(context, function, variable_types[receiver], method_name)
+        if len(method_targets) == 1:
+            reason = "type_hint_method_call" if variable_types[receiver].startswith("hint:") else "instantiated_method_call"
+            label = "type hint" if reason == "type_hint_method_call" else "direct instantiation"
+            return [(method_targets[0], "confirmed", reason, f"Resolved {receiver}.{method_name}() from {label}")]
+        if len(method_targets) > 1:
+            return [
+                (target, "uncertain", "ambiguous_method_call", f"Ambiguous method call {receiver}.{method_name}() could target this method")
+                for target in method_targets[:5]
+            ]
 
     if "." not in call_name:
         local_target = _find_qualified(same_file, call_name)
@@ -221,6 +269,57 @@ def _resolve_call(
     return []
 
 
+def _collect_variable_types(context: _AnalysisContext, function: FunctionInfo) -> dict[str, str]:
+    variable_types: dict[str, str] = {}
+    for node in ast.walk(function.node):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)) and node is not function.node:
+            continue
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+            class_name = _expanded_call_name(context, function, _dotted_name(node.value.func) or "")
+            if _is_known_class(context, class_name):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        variable_types[target.id] = class_name
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            annotation = ast.unparse(node.annotation)
+            expanded_annotation = _expanded_call_name(context, function, annotation)
+            if _is_known_class(context, expanded_annotation):
+                variable_types[node.target.id] = f"hint:{expanded_annotation}"
+            if isinstance(node.value, ast.Call):
+                class_name = _expanded_call_name(context, function, _dotted_name(node.value.func) or "")
+                if _is_known_class(context, class_name):
+                    variable_types[node.target.id] = class_name
+    return variable_types
+
+
+def _is_known_class(context: _AnalysisContext, class_name: str) -> bool:
+    normalized = class_name.removeprefix("hint:")
+    if normalized in context.classes_by_module_qualified_name:
+        return True
+    short_name = normalized.rsplit(".", 1)[-1]
+    return short_name in context.classes_by_name
+
+
+def _resolve_method_targets(context: _AnalysisContext, function: FunctionInfo, class_name: str, method_name: str) -> list[FunctionInfo]:
+    normalized = class_name.removeprefix("hint:")
+    class_infos = []
+    if normalized in context.classes_by_module_qualified_name:
+        class_infos = [context.classes_by_module_qualified_name[normalized]]
+    else:
+        short_name = normalized.rsplit(".", 1)[-1]
+        class_infos = list(context.classes_by_name.get(short_name, ()))
+
+    targets: list[FunctionInfo] = []
+    for class_info in class_infos:
+        target = _find_qualified(
+            context.functions_by_path.get(class_info.relative_path, ()),
+            f"{class_info.qualified_name}.{method_name}",
+        )
+        if target is not None:
+            targets.append(target)
+    return sorted(targets, key=lambda target: (target.relative_path, target.qualified_name))
+
+
 def _collect_calls(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[tuple[ast.Call, bool]]:
     calls: list[tuple[ast.Call, bool]] = []
 
@@ -250,6 +349,70 @@ def _collect_calls(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[tuple[a
     node_to_visit = node
     CallVisitor().visit(node)
     return sorted(calls, key=lambda item: (item[0].lineno, item[0].col_offset, _dotted_name(item[0].func) or ""))
+
+
+def _external_interaction(call_name: str, call: ast.Call) -> tuple[str, str, str] | None:
+    normalized = call_name.lower()
+    attr = _method_name(call.func)
+
+    if normalized in {"open", "path"} or normalized.startswith(("os.", "pathlib.", "shutil.")):
+        return "filesystem", "filesystem_call", f"Filesystem interaction via {call_name}()"
+    if attr in {"read_text", "write_text", "read_bytes", "write_bytes", "open", "mkdir", "unlink", "rmdir", "rename", "replace", "glob", "rglob", "iterdir", "exists", "stat"}:
+        return "filesystem", "filesystem_method_call", f"Filesystem interaction via .{attr}()"
+
+    if normalized in {"os.system", "os.popen"} or normalized.startswith("subprocess."):
+        return "subprocess", "subprocess_call", f"Subprocess/shell interaction via {call_name}()"
+
+    if normalized.startswith(("requests.", "httpx.", "urllib.request.", "aiohttp.")):
+        return "network", "network_call", f"HTTP/network interaction via {call_name}()"
+    if attr in {"get", "post", "put", "patch", "delete", "request"} and _looks_like_url_argument(call):
+        return "network", "network_method_call", f"HTTP/network interaction via .{attr}()"
+
+    if normalized.startswith(("sqlite3.", "psycopg2.", "pymysql.", "mysql.connector.", "sqlalchemy.")):
+        return "database", "database_call", f"Database interaction via {call_name}()"
+    if attr in {"execute", "executemany", "query", "commit", "rollback", "connect"}:
+        return "database", "database_method_call", f"Database interaction via .{attr}()"
+
+    return None
+
+
+def _looks_like_url_argument(call: ast.Call) -> bool:
+    for arg in call.args:
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value.startswith(("http://", "https://")):
+            return True
+    return False
+
+
+def _external_node_id(category: str, call_name: str) -> str:
+    safe_name = call_name.replace(":", "_").replace("/", "_")
+    return f"node:external:{category}:{safe_name}"
+
+
+def _external_node_from_id(node_id: str) -> GraphNode:
+    _, _, category, label = node_id.split(":", 3)
+    return {
+        "id": node_id,
+        "kind": "external",
+        "label": f"{category}: {label}",
+        "qualified_name": label,
+    }
+
+
+def _build_external_edge(
+    source: FunctionInfo,
+    target_node_id: str,
+    call: ast.Call,
+    reason_code: str,
+    reason_label: str,
+) -> GraphEdge:
+    return {
+        "id": f"edge:external_interaction:confirmed:{source.node_id}->{target_node_id}:{call.lineno}:{call.col_offset}",
+        "kind": "external_interaction",
+        "source": source.node_id,
+        "target": target_node_id,
+        "certainty": "confirmed",
+        "evidence": _evidence(source.relative_path, call, reason_code, reason_label),
+    }
 
 
 def _build_edge(
@@ -312,6 +475,18 @@ def _functions_by_module_qualified_name(modules: tuple[ModuleInfo, ...], functio
     return {f"{module_by_path[fn.relative_path].qualified_name}.{fn.qualified_name}": fn for fn in functions}
 
 
+def _classes_by_name(classes: tuple[ClassInfo, ...]) -> dict[str, tuple[ClassInfo, ...]]:
+    grouped: dict[str, list[ClassInfo]] = {}
+    for cls in classes:
+        grouped.setdefault(cls.name, []).append(cls)
+    return {key: tuple(sorted(value, key=lambda cls: (cls.relative_path, cls.qualified_name))) for key, value in grouped.items()}
+
+
+def _classes_by_module_qualified_name(modules: tuple[ModuleInfo, ...], classes: tuple[ClassInfo, ...]) -> dict[str, ClassInfo]:
+    module_by_path = {module.relative_path: module for module in modules}
+    return {f"{module_by_path[cls.relative_path].qualified_name}.{cls.qualified_name}": cls for cls in classes}
+
+
 def _import_aliases_by_path(discovery: DiscoveryResult) -> dict[str, dict[str, str]]:
     aliases_by_path: dict[str, dict[str, str]] = {}
     for module in discovery.modules:
@@ -330,6 +505,12 @@ def _import_aliases_by_path(discovery: DiscoveryResult) -> dict[str, dict[str, s
 
 def _find_qualified(functions: tuple[FunctionInfo, ...], qualified_name: str) -> FunctionInfo | None:
     return next((fn for fn in functions if fn.qualified_name == qualified_name), None)
+
+
+def _method_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
 
 
 def _dotted_name(node: ast.AST) -> str | None:

@@ -91,8 +91,8 @@ def build_discovery_graph(
             node["type_hints"] = fn.type_hints
         nodes.append(node)
 
-    graph["nodes"] = nodes
     flow_analysis = analyze_flows(discovery, max_depth=max_depth)
+    graph["nodes"] = [*nodes, *flow_analysis.external_nodes]
 
     graph["entry_points"] = [
         {

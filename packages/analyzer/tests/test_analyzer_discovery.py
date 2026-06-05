@@ -168,6 +168,222 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertEqual(reason_codes, {"imported_module_call", "imported_function_call"})
         self.assertTrue(all(edge["certainty"] == "confirmed" for edge in graph["edges"]))
 
+    def test_cli_resolves_self_instantiated_and_type_hint_method_calls(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    from services import Service
+
+                    @app.get('/')
+                    def home():
+                        local = LocalService()
+                        local.run()
+                        svc: Service
+                        svc.execute()
+
+                    class LocalService:
+                        def run(self):
+                            self.finish()
+
+                        def finish(self):
+                            pass
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "services.py").write_text(
+                "class Service:\n    def execute(self):\n        pass\n",
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        reason_codes = {edge["evidence"]["reason"]["code"] for edge in graph["edges"]}
+        self.assertGreaterEqual(reason_codes, {"instantiated_method_call", "type_hint_method_call", "self_method_call"})
+        self.assertTrue(all(edge["certainty"] == "confirmed" for edge in graph["edges"]))
+
+    def test_cli_emits_uncertain_edges_for_ambiguous_method_dispatch(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @app.get('/')
+                    def home():
+                        svc: Service
+                        svc.run()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "one.py").write_text("class Service:\n    def run(self):\n        pass\n", encoding="utf-8")
+            (root / "two.py").write_text("class Service:\n    def run(self):\n        pass\n", encoding="utf-8")
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        uncertain = [edge for edge in graph["edges"] if edge["certainty"] == "uncertain"]
+        self.assertEqual(len(uncertain), 2)
+        self.assertTrue(all(edge["evidence"]["reason"]["code"] == "ambiguous_method_call" for edge in uncertain))
+
+    def test_cli_applies_explicit_overlay_to_uncertain_edges(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @app.get('/')
+                    def home():
+                        process()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "one.py").write_text("def process():\n    pass\n", encoding="utf-8")
+            (root / "two.py").write_text("def process():\n    pass\n", encoding="utf-8")
+            initial_out = root / "initial.json"
+            overlay_path = root / "overlay.json"
+            final_out = root / "final.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(initial_out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            initial_graph = json.loads(initial_out.read_text(encoding="utf-8"))
+            edge_id = next(edge["id"] for edge in initial_graph["edges"] if edge["certainty"] == "uncertain")
+            overlay_path.write_text(json.dumps({"edge_resolutions": [{"edge_id": edge_id, "certainty": "rejected"}]}), encoding="utf-8")
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "avt_analyzer.cli",
+                    "analyze",
+                    str(root),
+                    "--no-timestamp",
+                    "--out",
+                    str(final_out),
+                    "--overlay",
+                    str(overlay_path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            final_graph = json.loads(final_out.read_text(encoding="utf-8"))
+
+        resolved = next(edge for edge in final_graph["edges"] if edge["id"] == edge_id)
+        self.assertEqual(resolved["certainty"], "rejected")
+        self.assertEqual(resolved["evidence"]["reason"]["code"], "overlay_resolution")
+
+    def test_cli_applies_default_project_overlay(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @app.get('/')
+                    def home():
+                        process()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "one.py").write_text("def process():\n    pass\n", encoding="utf-8")
+            (root / "two.py").write_text("def process():\n    pass\n", encoding="utf-8")
+            initial_out = root / "initial.json"
+            final_out = root / "final.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(initial_out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            initial_graph = json.loads(initial_out.read_text(encoding="utf-8"))
+            edge_id = next(edge["id"] for edge in initial_graph["edges"] if edge["certainty"] == "uncertain")
+            (root / ".avt").mkdir()
+            (root / ".avt" / "overlay.json").write_text(
+                json.dumps({"edge_resolutions": [{"edge_id": edge_id, "certainty": "confirmed"}]}),
+                encoding="utf-8",
+            )
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(final_out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            final_graph = json.loads(final_out.read_text(encoding="utf-8"))
+
+        resolved = next(edge for edge in final_graph["edges"] if edge["id"] == edge_id)
+        self.assertEqual(resolved["certainty"], "confirmed")
+        self.assertEqual(resolved["evidence"]["reason"]["code"], "overlay_resolution")
+
+    def test_cli_emits_external_interaction_edges(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    import os
+                    import subprocess
+                    import requests as rq
+                    import sqlite3
+                    from pathlib import Path
+
+                    @app.get('/')
+                    def home():
+                        open('data.txt')
+                        Path('data.txt').read_text()
+                        subprocess.run(['echo', 'ok'])
+                        os.system('echo ok')
+                        rq.get('https://example.com')
+                        sqlite3.connect('db.sqlite')
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        external_nodes = [node for node in graph["nodes"] if node["kind"] == "external"]
+        external_edges = [edge for edge in graph["edges"] if edge["kind"] == "external_interaction"]
+        reason_codes = {edge["evidence"]["reason"]["code"] for edge in external_edges}
+        labels = {node["label"].split(":", 1)[0] for node in external_nodes}
+
+        self.assertGreaterEqual(labels, {"filesystem", "subprocess", "network", "database"})
+        self.assertGreaterEqual(
+            reason_codes,
+            {"filesystem_call", "filesystem_method_call", "subprocess_call", "network_call", "database_call"},
+        )
+        self.assertEqual(set(graph["flows"][0]["edge_ids"]), {edge["id"] for edge in external_edges})
+        self.assertTrue(set(graph["flows"][0]["node_ids"]).issuperset({node["id"] for node in external_nodes}))
+
     def test_cli_emits_uncertain_edges_for_ambiguous_local_names(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

@@ -21,8 +21,24 @@ Implemented Phase 1 foundations:
 - local call traversal from Entry Points up to `--max-depth`;
 - confirmed `call` and `await` edges for same-module and imported local functions;
 - basic `uncertain` edges when an unqualified call name ambiguously matches multiple local functions;
-- reachable Flow Markers for async functions, conditionals, loops, raises, and returns.
+- reachable Flow Markers for async functions, conditionals, loops, raises, and returns;
+- External Interaction nodes and edges for filesystem, subprocess/shell, HTTP/network, and database-ish calls;
+- method call resolution for `self.method()`, directly instantiated locals, and type-hint-based locals;
+- uncertain method edges when a type name ambiguously matches multiple local classes.
 
-The analyzer currently builds hierarchy/function nodes and first-pass Execution Flows. External Interactions and advanced method/dynamic dispatch come next.
+Analysis Overlay support:
+
+```json
+{
+  "edge_resolutions": [
+    {"edge_id": "edge:...", "certainty": "confirmed"},
+    {"edge_id": "edge:...", "certainty": "rejected"}
+  ]
+}
+```
+
+Use `--overlay path` or place the file at `<project>/.avt/overlay.json`. Overlay resolutions apply only to uncertain edges.
+
+The analyzer currently builds hierarchy/function nodes and first-pass Execution Flows. Safety/redaction and schema hardening come next.
 
 This package is intentionally CLI/library-first. A backend API can wrap it later.
