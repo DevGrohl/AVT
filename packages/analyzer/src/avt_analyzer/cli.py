@@ -10,6 +10,7 @@ from pathlib import Path
 from avt_analyzer import __version__
 from avt_analyzer.entrypoints import discover_entry_points
 from avt_analyzer.graph import build_discovery_graph
+from avt_analyzer.guide import load_guide_entries, write_guide_file
 from avt_analyzer.overlay import apply_overlay, load_overlay
 from avt_analyzer.safety import scan_safety
 from avt_analyzer.scanner import scan_python_project
@@ -30,7 +31,15 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--no-timestamp", action="store_true", help="Omit generated timestamp for reproducible output")
     analyze.add_argument("--include-tests", action="store_true", help="Include tests in scanning")
     analyze.add_argument("--max-depth", type=int, default=6, help="Maximum call traversal depth")
+    analyze.add_argument("--guide", type=Path, help="Guide suggestions JSON to validate and add as manual Entry Points")
     analyze.set_defaults(func=analyze_command)
+
+    guide = subparsers.add_parser("guide-entrypoints", help="Generate safe Guide Entry Point suggestions")
+    guide.add_argument("path", type=Path, nargs="?", help="Project directory to summarize")
+    guide.add_argument("--input", type=Path, help="Absolute project directory to summarize; alternative to positional path")
+    guide.add_argument("--out", type=Path, required=True, help="Output Guide suggestions JSON path")
+    guide.add_argument("--include-tests", action="store_true", help="Include tests in scanning")
+    guide.set_defaults(func=guide_entrypoints_command)
 
     return parser
 
@@ -57,7 +66,14 @@ def analyze_command(args: argparse.Namespace) -> int:
         overlay = candidate if candidate.exists() else None
 
     scan = scan_python_project(project_path, include_tests=args.include_tests)
-    discovery = discover_entry_points(scan, manual_entries=args.entry)
+    base_discovery = discover_entry_points(scan)
+    guide_warnings = []
+    guide_entries = ()
+    if args.guide is not None:
+        guide_result = load_guide_entries(args.guide, base_discovery)
+        guide_entries = guide_result.entries
+        guide_warnings = list(guide_result.warnings)
+    discovery = discover_entry_points(scan, manual_entries=[*args.entry, *guide_entries])
     graph = build_discovery_graph(
         project_name=project_path.name,
         analyzer_version=__version__,
@@ -65,7 +81,7 @@ def analyze_command(args: argparse.Namespace) -> int:
         include_timestamp=not args.no_timestamp,
         max_depth=args.max_depth,
     )
-    graph["warnings"] = [*scan.warnings, *scan_safety(scan), *graph["warnings"]]
+    graph["warnings"] = [*scan.warnings, *scan_safety(scan), *guide_warnings, *graph["warnings"]]
     if overlay is not None:
         apply_overlay(graph, load_overlay(overlay))
 
@@ -96,6 +112,29 @@ def analyze_command(args: argparse.Namespace) -> int:
         print(f"Output folder: {args.output}")
     if overlay is not None:
         print(f"Overlay applied: {overlay}")
+    if args.guide is not None:
+        print(f"Guide applied: {args.guide}")
+    return 0
+
+
+def guide_entrypoints_command(args: argparse.Namespace) -> int:
+    project_path = _resolve_project_path(args)
+    if project_path is None:
+        return 2
+    if not project_path.exists():
+        print(f"error: path does not exist: {project_path}", file=sys.stderr)
+        return 2
+    if not project_path.is_dir():
+        print(f"error: path is not a directory: {project_path}", file=sys.stderr)
+        return 2
+
+    scan = scan_python_project(project_path, include_tests=args.include_tests)
+    discovery = discover_entry_points(scan)
+    write_guide_file(args.out, project_name=project_path.name, discovery=discovery)
+
+    print(f"Files scanned: {len(scan.files)}")
+    print(f"Entry Points found: {len(discovery.entry_points)}")
+    print(f"Guide suggestions written: {args.out}")
     return 0
 
 

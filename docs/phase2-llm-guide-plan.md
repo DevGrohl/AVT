@@ -83,12 +83,31 @@ avt analyze /path/to/project --with-guide --out /tmp/avt-graph.json
 ## Implementation sequence
 
 1. Add a provider-neutral `GuideClient` interface.
-2. Add a safe project-summary builder from existing scanner/discovery data.
-3. Add JSON schema validation for Guide responses.
-4. Add `guide-entrypoints` CLI command that writes suggestions only.
-5. Add analyzer support for validated Guide suggestions as manual Entry Points.
+2. Add a safe project-summary builder from existing scanner/discovery data. ✅
+3. Add JSON schema validation for Guide responses. ✅ basic structural validation
+4. Add `guide-entrypoints` CLI command that writes suggestions only. ✅ static baseline provider
+5. Add analyzer support for validated Guide suggestions as manual Entry Points. ✅ invalid suggestions become warnings; duplicates are skipped
 6. Show Guide suggestions and reasons in the viewer.
-7. Validate on RealtorCareersAPI and compare against static discovery.
+7. Validate on RealtorCareersAPI and compare against static discovery. ✅ initial static baseline
+
+## Phase 2 Slice 1 Status
+
+Implemented first foundation slice:
+
+- `avt guide-entrypoints <path> --out guide.json`
+- source-free `safe_project_summary`
+- deterministic baseline `suggested_entry_points`
+- `avt analyze --guide guide.json`
+- validation against scanned symbols
+- invalid suggestions emitted as warnings
+- already-discovered suggestions skipped to avoid duplicate flows
+
+RealtorCareersAPI baseline:
+
+- 62 files scanned
+- 55 static Entry Points found
+- 10 baseline Guide suggestions written
+- applying the baseline Guide keeps 55 Entry Points/flows because all baseline suggestions are already statically discovered
 
 ## RealtorCareersAPI validation focus
 

@@ -11,6 +11,7 @@ From the AVT repository root:
 ```sh
 uv run --project packages/analyzer avt --help
 uv run --project packages/analyzer avt analyze --help
+uv run --project packages/analyzer avt guide-entrypoints --help
 ```
 
 Generate a graph file:
@@ -59,6 +60,7 @@ avt analyze [path] [options]
 | `--no-timestamp` | no | flag | false | Omit `metadata.generated_at` for reproducible output. |
 | `--include-tests` | no | flag | false | Include tests in scanning. Tests are excluded by default. |
 | `--max-depth` | no | integer | `6` | Maximum confirmed-call traversal depth from each Entry Point. |
+| `--guide` | no | path | none | Validate Guide suggestions JSON and add valid, not-already-discovered suggestions as manual Entry Points. |
 
 ## Usage examples
 
@@ -147,6 +149,24 @@ uv run --project packages/analyzer avt analyze /path/to/project \
   --entry cli.py:analyze_command \
   --out graph.json
 ```
+
+### Generate Phase 2 Guide suggestions
+
+The first Phase 2 slice writes a safe, provider-neutral Guide file. It contains source-free project summary metadata and deterministic baseline suggestions. Future LLM providers can use the same contract.
+
+```sh
+uv run --project packages/analyzer avt guide-entrypoints /path/to/project --out /tmp/avt-guide.json
+```
+
+Apply validated Guide suggestions during analysis:
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project \
+  --guide /tmp/avt-guide.json \
+  --out graph.json
+```
+
+Guide suggestions are validated against scanned symbols. Invalid suggestions become warnings. Suggestions already discovered by static analysis are not duplicated.
 
 ### Include tests
 

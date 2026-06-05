@@ -257,6 +257,75 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(graph["flows"][0]["edge_ids"]), 1)
         self.assertEqual(len(graph["flows"][0]["node_ids"]), 2)
 
+    def test_cli_guide_entrypoints_writes_safe_summary_and_suggestions(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @app.get('/items')
+                    def list_items():
+                        return []
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = Path(temp) / "guide.json"
+
+            result = subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "guide-entrypoints", str(root), "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            guide = json.loads(out.read_text(encoding="utf-8"))
+
+        self.assertIn("Guide suggestions written", result.stdout)
+        self.assertIn("safe_project_summary", guide)
+        self.assertEqual(guide["suggested_entry_points"][0]["entry"], "app.py:list_items")
+        self.assertIn("functions", guide["safe_project_summary"])
+
+    def test_cli_analyze_validates_guide_suggestions(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    def helper():
+                        return None
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            guide = Path(temp) / "guide.json"
+            guide.write_text(
+                json.dumps(
+                    {
+                        "suggested_entry_points": [
+                            {"entry": "app.py:helper", "kind": "manual", "confidence": "high", "reason": "Valid", "risk": "None"},
+                            {"entry": "missing.py:nope", "kind": "manual", "confidence": "low", "reason": "Invalid", "risk": "Missing"},
+                        ],
+                        "project_observations": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            out = Path(temp) / "graph.json"
+
+            result = subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--guide", str(guide), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        self.assertIn("Guide applied", result.stdout)
+        self.assertIn("manual", {entry["kind"] for entry in graph["entry_points"]})
+        self.assertIn("guide_entry_not_found", {warning["code"] for warning in graph["warnings"]})
+
     def test_cli_input_and_output_folder_mode_writes_parsing_results(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp) / "repo"
