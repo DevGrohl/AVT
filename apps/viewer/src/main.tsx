@@ -365,8 +365,19 @@ function buildSelectionOptions(graph: ExecutionFlowGraph): FlowSelectionOption[]
 
   const webRoutes = graph.entry_points.filter((entry) => entry.kind === 'web_route');
   const groupOptions: FlowSelectionOption[] = [];
+  const byKind = groupBy(graph.entry_points, (entry) => entry.kind);
   const byDirectory = groupBy(webRoutes, (entry) => directoryName(entry.evidence.location.path));
   const byFile = groupBy(webRoutes, (entry) => entry.evidence.location.path);
+
+  for (const [kind, entries] of [...byKind.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    if (entries.length < 2) continue;
+    groupOptions.push({
+      id: `group:kind:${kind}`,
+      label: `All ${kind} Entry Points (${entries.length})`,
+      kind: 'group',
+      entryPointIds: entries.map((entry) => entry.id).sort(),
+    });
+  }
 
   for (const [directory, entries] of [...byDirectory.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     if (entries.length < 2) continue;

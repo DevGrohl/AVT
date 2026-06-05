@@ -81,6 +81,7 @@ Use **Selected Entry Point / Group** to choose what to inspect.
 The selector includes:
 
 - individual Entry Points;
+- grouped Entry Points by kind, such as `All web_route Entry Points` or `All framework_hook Entry Points`;
 - grouped web route options by directory, such as `All web routes in app/api/endpoints/*`;
 - grouped web route options by file, such as `All web routes in app/api/endpoints/users.py`.
 
