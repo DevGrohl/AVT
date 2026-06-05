@@ -82,7 +82,7 @@ avt analyze /path/to/project --with-guide --out /tmp/avt-graph.json
 
 ## Implementation sequence
 
-1. Add a provider-neutral `GuideClient` interface.
+1. Add a provider-neutral `GuideProvider` interface. ✅ static baseline provider
 2. Add a safe project-summary builder from existing scanner/discovery data. ✅
 3. Add JSON schema validation for Guide responses. ✅ basic structural validation
 4. Add `guide-entrypoints` CLI command that writes suggestions only. ✅ static baseline provider

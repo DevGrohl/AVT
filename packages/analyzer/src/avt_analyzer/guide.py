@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, Protocol, TypedDict
 
 from avt_analyzer.entrypoints import DiscoveryResult, EntryPointCandidate
 from avt_analyzer.schema import GraphWarning
@@ -31,6 +31,24 @@ class GuideSuggestion(TypedDict):
 class GuideOutput(TypedDict):
     suggested_entry_points: list[GuideSuggestion]
     project_observations: list[str]
+
+
+class GuideProvider(Protocol):
+    """Provider-neutral contract for Phase 2 Guide implementations."""
+
+    name: str
+
+    def suggest_entry_points(self, *, project_name: str, discovery: DiscoveryResult, safe_summary: dict[str, object]) -> GuideOutput:
+        """Return structured Guide suggestions from safe project metadata."""
+
+
+class StaticGuideProvider:
+    """Deterministic metadata-only provider used for tests and offline baseline."""
+
+    name = "static"
+
+    def suggest_entry_points(self, *, project_name: str, discovery: DiscoveryResult, safe_summary: dict[str, object]) -> GuideOutput:
+        return build_static_guide_output(project_name=project_name, discovery=discovery)
 
 
 @dataclass(frozen=True)
@@ -96,12 +114,14 @@ def build_static_guide_output(*, project_name: str, discovery: DiscoveryResult) 
     }
 
 
-def write_guide_file(path: Path, *, project_name: str, discovery: DiscoveryResult) -> None:
+def write_guide_file(path: Path, *, project_name: str, discovery: DiscoveryResult, provider: GuideProvider | None = None) -> None:
     safe_summary = build_safe_project_summary(project_name=project_name, discovery=discovery)
+    guide_provider = provider or StaticGuideProvider()
     payload = {
+        "provider": guide_provider.name,
         "safe_project_summary": safe_summary,
         "llm_prompt": build_guide_prompt(safe_summary),
-        **build_static_guide_output(project_name=project_name, discovery=discovery),
+        **guide_provider.suggest_entry_points(project_name=project_name, discovery=discovery, safe_summary=safe_summary),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

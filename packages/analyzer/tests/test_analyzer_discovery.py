@@ -282,6 +282,7 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
             guide = json.loads(out.read_text(encoding="utf-8"))
 
         self.assertIn("Guide suggestions written", result.stdout)
+        self.assertEqual(guide["provider"], "static")
         self.assertIn("safe_project_summary", guide)
         self.assertIn("llm_prompt", guide)
         self.assertIn("SAFE PROJECT METADATA JSON", guide["llm_prompt"])
