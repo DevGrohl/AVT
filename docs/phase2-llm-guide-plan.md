@@ -87,7 +87,7 @@ avt analyze /path/to/project --with-guide --out /tmp/avt-graph.json
 3. Add JSON schema validation for Guide responses. ✅ basic structural validation
 4. Add `guide-entrypoints` CLI command that writes suggestions only. ✅ static baseline provider
 5. Add analyzer support for validated Guide suggestions as manual Entry Points. ✅ invalid suggestions become warnings; duplicates are skipped
-6. Show Guide suggestions and reasons in the viewer.
+6. Show Guide suggestions and reasons in the viewer. ✅ guide JSON side panel
 7. Validate on RealtorCareersAPI and compare against static discovery. ✅ initial static baseline
 
 ## Phase 2 Slice 1 Status

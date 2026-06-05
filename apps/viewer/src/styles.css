@@ -39,6 +39,13 @@ select {
   margin-bottom: 24px;
 }
 
+.fileActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
 h1,
 h2,
 h3,
@@ -84,6 +91,12 @@ h2 {
 
 .filePicker input {
   display: none;
+}
+
+.secondaryPicker {
+  color: #315efb;
+  background: #eef3ff;
+  border-color: #c8d5ff;
 }
 
 .error {
@@ -231,7 +244,9 @@ select {
   min-width: 0;
 }
 
-.itemList {
+.itemList,
+.guideList,
+.compactList {
   display: grid;
   gap: 10px;
   list-style: none;
@@ -239,7 +254,9 @@ select {
   padding: 0;
 }
 
-.itemList li {
+.itemList li,
+.guideList li,
+.compactList li {
   display: grid;
   gap: 6px;
   padding: 12px;

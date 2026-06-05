@@ -81,6 +81,21 @@ export interface GraphWarning {
   location?: SourceLocation;
 }
 
+export interface GuideSuggestion {
+  entry: string;
+  kind: string;
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+  risk: string;
+}
+
+export interface GuideFile {
+  suggested_entry_points: GuideSuggestion[];
+  project_observations: string[];
+  safe_project_summary?: unknown;
+  llm_prompt?: string;
+}
+
 export interface ExecutionFlowGraph {
   metadata: GraphMetadata;
   entry_points: EntryPoint[];
@@ -89,6 +104,12 @@ export interface ExecutionFlowGraph {
   edges: GraphEdge[];
   markers: FlowMarker[];
   warnings: GraphWarning[];
+}
+
+export function isGuideFile(value: unknown): value is GuideFile {
+  if (!value || typeof value !== 'object') return false;
+  const guide = value as Partial<GuideFile>;
+  return Array.isArray(guide.suggested_entry_points) && Array.isArray(guide.project_observations);
 }
 
 export function isExecutionFlowGraph(value: unknown): value is ExecutionFlowGraph {

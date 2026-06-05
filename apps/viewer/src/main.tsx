@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { ReactFlow, Background, Controls, MiniMap, type Edge as FlowEdge, type Node as FlowNode } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
-import type { EntryPoint, ExecutionFlow, ExecutionFlowGraph, FlowMarker, GraphEdge, GraphNode } from './graph';
-import { isExecutionFlowGraph } from './graph';
+import type { EntryPoint, ExecutionFlow, ExecutionFlowGraph, FlowMarker, GraphEdge, GraphNode, GuideFile } from './graph';
+import { isExecutionFlowGraph, isGuideFile } from './graph';
 
 type InspectorSelection =
   | { type: 'node'; item: GraphNode; markers: FlowMarker[] }
@@ -36,6 +36,7 @@ interface FlowSelectionOption {
 
 function App() {
   const [graph, setGraph] = useState<ExecutionFlowGraph | null>(null);
+  const [guide, setGuide] = useState<GuideFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
@@ -78,6 +79,17 @@ function App() {
     return buildFlowModel(graph, selectedFlow, edgeFilters, diagramLayout, displayOptions);
   }, [graph, selectedFlow, edgeFilters, diagramLayout, displayOptions]);
 
+  async function handleGuideSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    try {
+      setGuide(parseGuide(await file.text()));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
   async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -99,10 +111,16 @@ function App() {
           <p className="eyebrow">Architecture Visualizer Tool</p>
           <h1>Execution Flow Viewer</h1>
         </div>
-        <label className="filePicker">
-          Load graph JSON
-          <input type="file" accept="application/json,.json" onChange={handleFileSelected} />
-        </label>
+        <div className="fileActions">
+          <label className="filePicker">
+            Load graph JSON
+            <input type="file" accept="application/json,.json" onChange={handleFileSelected} />
+          </label>
+          <label className="filePicker secondaryPicker">
+            Load guide JSON
+            <input type="file" accept="application/json,.json" onChange={handleGuideSelected} />
+          </label>
+        </div>
       </header>
 
       {error ? <section className="error">{error}</section> : null}
@@ -130,6 +148,7 @@ function App() {
             <DiagramLayoutControls layout={diagramLayout} onChange={setDiagramLayout} />
             <DiagramDisplayControls options={displayOptions} onChange={setDisplayOptions} />
             <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
+            <GuideSummary guide={guide} />
             <Inspector selection={selection} />
           </aside>
 
@@ -245,6 +264,38 @@ function DiagramDisplayControls({ options, onChange }: { options: DiagramDisplay
         <option value="reason">Reason</option>
         <option value="none">None</option>
       </select>
+    </section>
+  );
+}
+
+function GuideSummary({ guide }: { guide: GuideFile | null }) {
+  if (!guide) {
+    return (
+      <section className="summaryBlock">
+        <h3>Guide</h3>
+        <p className="hint">Load a Phase 2 guide JSON file to inspect suggested Entry Points and reasons.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="summaryBlock guidePanel">
+      <h3>Guide suggestions</h3>
+      {guide.project_observations.length ? (
+        <ul className="compactList">
+          {guide.project_observations.map((observation, index) => <li key={index}>{observation}</li>)}
+        </ul>
+      ) : null}
+      <ul className="guideList">
+        {guide.suggested_entry_points.map((suggestion) => (
+          <li key={`${suggestion.entry}:${suggestion.kind}`}>
+            <span className={`certainty certainty-${suggestion.confidence === 'high' ? 'confirmed' : suggestion.confidence === 'medium' ? 'uncertain' : 'rejected'}`}>{suggestion.confidence}</span>
+            <strong>{suggestion.entry}</strong>
+            <p>{suggestion.reason}</p>
+            <p className="hint">Risk: {suggestion.risk}</p>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -826,6 +877,12 @@ async function loadSampleGraph(): Promise<ExecutionFlowGraph> {
   const response = await fetch('/sample-graph.json');
   if (!response.ok) throw new Error(`Could not load sample graph: ${response.status}`);
   return parseGraph(await response.text());
+}
+
+function parseGuide(text: string): GuideFile {
+  const parsed = JSON.parse(text) as unknown;
+  if (!isGuideFile(parsed)) throw new Error('Selected file is not an AVT Guide JSON file.');
+  return parsed;
 }
 
 async function parseGraph(text: string): Promise<ExecutionFlowGraph> {
