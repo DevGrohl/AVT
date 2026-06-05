@@ -64,6 +64,103 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertIn(("script", "scripts/tool.py", "main"), entries)
         self.assertIn(("manual", "app.py", "list_items"), entries)
 
+    def test_cli_input_and_output_folder_mode_writes_parsing_results(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @app.get('/')
+                    def home():
+                        return None
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            output = Path(temp) / "avt-output"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "avt_analyzer.cli",
+                    "analyze",
+                    "--input",
+                    str(root.resolve()),
+                    "--output",
+                    str(output),
+                    "--no-timestamp",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            graph = json.loads((output / "graph.json").read_text(encoding="utf-8"))
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            warnings = json.loads((output / "warnings.json").read_text(encoding="utf-8"))
+            entrypoints = json.loads((output / "entrypoints.json").read_text(encoding="utf-8"))
+
+        self.assertIn("Output folder:", result.stdout)
+        self.assertEqual(graph["metadata"]["project_name"], "repo")
+        self.assertEqual(summary["files_scanned"], 1)
+        self.assertEqual(summary["entry_points_found"], 1)
+        self.assertEqual(warnings, [])
+        self.assertEqual(entrypoints, graph["entry_points"])
+
+    def test_cli_output_folder_accepts_ouput_typo_alias(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+            (root / "app.py").write_text("def main():\n    pass\nif __name__ == '__main__':\n    main()\n", encoding="utf-8")
+            output = Path(temp) / "avt-output"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--ouput", str(output), "--no-timestamp"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertTrue((output / "graph.json").exists())
+            self.assertTrue((output / "summary.json").exists())
+
+    def test_cli_rejects_output_folder_with_out_file(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+            (root / "app.py").write_text("def main():\n    pass\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "avt_analyzer.cli",
+                    "analyze",
+                    str(root),
+                    "--out",
+                    str(Path(temp) / "graph.json"),
+                    "--output",
+                    str(Path(temp) / "avt-output"),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--out and --output cannot be used together", result.stderr)
+
+    def test_cli_rejects_relative_input_option(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "avt_analyzer.cli", "analyze", "--input", "relative/path"],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--input must be an absolute path", result.stderr)
+
     def test_cli_writes_graph_with_discovered_entry_points(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

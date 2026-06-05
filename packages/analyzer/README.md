@@ -13,10 +13,16 @@ uv run --project packages/analyzer avt --help
 uv run --project packages/analyzer avt analyze --help
 ```
 
-Generate a graph:
+Generate a graph file:
 
 ```sh
 uv run --project packages/analyzer avt analyze . --out /tmp/avt-graph.json
+```
+
+Generate an output folder with all parsing results:
+
+```sh
+uv run --project packages/analyzer avt analyze --input /absolute/path/to/repo --output avt-output
 ```
 
 Generate reproducible graph JSON:
@@ -36,15 +42,17 @@ python -m json.tool /tmp/avt-graph.json >/dev/null
 Command:
 
 ```sh
-avt analyze <path> [options]
+avt analyze [path] [options]
 ```
 
 ### Parameters and options
 
 | Option | Required | Value | Default | Description |
 | --- | --- | --- | --- | --- |
-| `<path>` | yes | directory | none | Local project directory to analyze. Must exist and be a directory. |
-| `--out` | no | path | `avt-graph.json` | Output graph JSON path. Parent directories are created automatically. |
+| `<path>` | conditionally | directory | none | Local project directory to analyze. Optional when `--input` is provided. |
+| `--input` | conditionally | absolute path | none | Absolute project directory to analyze. Optional alternative to positional `<path>`. If both are provided, they must resolve to the same directory. |
+| `--out` | no | path | `avt-graph.json` when `--output` is omitted | Output graph JSON file path. Parent directories are created automatically. Cannot be combined with `--output`. |
+| `--output` | no | folder path | none | Output folder for all parsing results. Writes `graph.json`, `summary.json`, `warnings.json`, and `entrypoints.json`. Cannot be combined with `--out`. |
 | `--entry` | no | `path.py:qualified.name` | none | Manual Entry Point. Can be repeated. Relative path is from analyzed project root. |
 | `--list-entrypoints` | no | flag | false | Print discovered Entry Points and counts without writing graph JSON. |
 | `--overlay` | no | path | `<project>/.avt/overlay.json` if present | Analysis Overlay path. Applies uncertain edge resolutions. |
@@ -54,11 +62,45 @@ avt analyze <path> [options]
 
 ## Usage examples
 
-### Analyze a project
+### Analyze a project to one graph file
 
 ```sh
 uv run --project packages/analyzer avt analyze /path/to/project --out graph.json
 ```
+
+If `--out` and `--output` are omitted, the analyzer writes `avt-graph.json` in the current directory.
+
+### Analyze with `--input`
+
+`--input` is an absolute-path alternative to the positional project path:
+
+```sh
+uv run --project packages/analyzer avt analyze --input /absolute/path/to/project --out graph.json
+```
+
+### Analyze to an output folder
+
+Use `--output` when you want all parsing result files in one folder:
+
+```sh
+uv run --project packages/analyzer avt analyze --input /absolute/path/to/project --output avt-output
+```
+
+Output folder contents:
+
+```text
+avt-output/
+  graph.json        Full Execution Flow Graph
+  summary.json      Counts and high-level run summary
+  warnings.json     Warning list only
+  entrypoints.json  Entry Point list only
+```
+
+Rules:
+
+- `--output` creates the folder if needed;
+- `--output` cannot be combined with `--out`;
+- `--ouput` is accepted as a typo-compatible alias, but `--output` is the documented spelling.
 
 ### List Entry Points
 

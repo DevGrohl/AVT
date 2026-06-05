@@ -43,6 +43,12 @@ uv run --project packages/analyzer avt analyze . --no-timestamp --out /tmp/avt-g
 python -m json.tool /tmp/avt-graph.json >/dev/null
 ```
 
+Folder output mode writes all parsing results:
+
+```sh
+uv run --project packages/analyzer avt analyze --input /absolute/path/to/repo --output avt-output
+```
+
 Useful variants:
 
 ```sh
@@ -81,7 +87,7 @@ npm run preview
 Command:
 
 ```sh
-avt analyze <path> [options]
+avt analyze [path] [options]
 ```
 
 Common usage through this monorepo:
@@ -95,7 +101,9 @@ Options summary:
 | Option | Value | Description |
 | --- | --- | --- |
 | `<path>` | directory | Project directory to analyze. Must exist and be a directory. |
-| `--out` | path | Output graph JSON path. Defaults to `avt-graph.json` in the current directory. |
+| `--out` | path | Output graph JSON file path. Defaults to `avt-graph.json` in the current directory when `--output` is omitted. |
+| `--input` | absolute path | Absolute project directory to analyze; alternative to positional `<path>`. |
+| `--output` | folder path | Folder for all parsing results: `graph.json`, `summary.json`, `warnings.json`, `entrypoints.json`. Cannot be combined with `--out`. |
 | `--entry` | `path.py:qualified.name` | Manual Entry Point. May be passed multiple times. |
 | `--list-entrypoints` | flag | Print discovered Entry Points and summary without writing graph JSON. |
 | `--overlay` | path | Analysis Overlay JSON path. Defaults to `<project>/.avt/overlay.json` when present. |
