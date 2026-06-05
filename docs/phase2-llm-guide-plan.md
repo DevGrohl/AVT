@@ -100,6 +100,7 @@ Implemented first foundation slice:
 - deterministic baseline `suggested_entry_points`
 - `avt analyze --guide guide.json`
 - validation against scanned symbols
+- validation for required suggestion fields (`entry`, `kind`, `confidence`, `reason`, `risk`)
 - invalid suggestions emitted as warnings
 - already-discovered suggestions skipped to avoid duplicate flows
 

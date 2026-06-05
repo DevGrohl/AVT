@@ -308,6 +308,7 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
                         "suggested_entry_points": [
                             {"entry": "app.py:helper", "kind": "manual", "confidence": "high", "reason": "Valid", "risk": "None"},
                             {"entry": "missing.py:nope", "kind": "manual", "confidence": "low", "reason": "Invalid", "risk": "Missing"},
+                            {"entry": "app.py:helper", "kind": "nonsense", "confidence": "certain", "reason": "Invalid", "risk": "Invalid"},
                         ],
                         "project_observations": [],
                     }

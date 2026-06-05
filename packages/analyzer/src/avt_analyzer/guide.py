@@ -16,6 +16,8 @@ from avt_analyzer.entrypoints import DiscoveryResult, EntryPointCandidate
 from avt_analyzer.schema import GraphWarning
 
 GuideConfidence = Literal["high", "medium", "low"]
+GUIDE_CONFIDENCES = {"high", "medium", "low"}
+GUIDE_ENTRY_KINDS = {"web_route", "framework_hook", "cli_command", "script", "manual"}
 
 
 class GuideSuggestion(TypedDict):
@@ -142,8 +144,9 @@ def load_guide_entries(path: Path, discovery: DiscoveryResult) -> GuideValidatio
     seen: set[str] = set()
 
     for suggestion in suggestions:
-        if not isinstance(suggestion, dict) or not isinstance(suggestion.get("entry"), str):
-            warnings.append({"code": "invalid_guide_suggestion", "message": "Guide suggestion missing string entry"})
+        schema_warnings = _validate_suggestion_shape(suggestion)
+        if schema_warnings:
+            warnings.extend(schema_warnings)
             continue
         entry = suggestion["entry"]
         try:
@@ -161,6 +164,30 @@ def load_guide_entries(path: Path, discovery: DiscoveryResult) -> GuideValidatio
             seen.add(entry)
 
     return GuideValidationResult(tuple(entries), tuple(warnings))
+
+
+def _validate_suggestion_shape(suggestion: object) -> list[GraphWarning]:
+    if not isinstance(suggestion, dict):
+        return [{"code": "invalid_guide_suggestion", "message": "Guide suggestion must be an object"}]
+
+    warnings: list[GraphWarning] = []
+    entry = suggestion.get("entry")
+    kind = suggestion.get("kind")
+    confidence = suggestion.get("confidence")
+    reason = suggestion.get("reason")
+    risk = suggestion.get("risk")
+
+    if not isinstance(entry, str):
+        warnings.append({"code": "invalid_guide_suggestion", "message": "Guide suggestion missing string entry"})
+    if not isinstance(kind, str) or kind not in GUIDE_ENTRY_KINDS:
+        warnings.append({"code": "invalid_guide_suggestion", "message": f"Guide suggestion has invalid kind: {kind}"})
+    if not isinstance(confidence, str) or confidence not in GUIDE_CONFIDENCES:
+        warnings.append({"code": "invalid_guide_suggestion", "message": f"Guide suggestion has invalid confidence: {confidence}"})
+    if not isinstance(reason, str) or not reason.strip():
+        warnings.append({"code": "invalid_guide_suggestion", "message": "Guide suggestion missing non-empty reason"})
+    if not isinstance(risk, str) or not risk.strip():
+        warnings.append({"code": "invalid_guide_suggestion", "message": "Guide suggestion missing non-empty risk"})
+    return warnings
 
 
 def _entry_point_summary(entry: EntryPointCandidate) -> dict[str, object]:

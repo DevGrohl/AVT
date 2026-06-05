@@ -166,7 +166,7 @@ uv run --project packages/analyzer avt analyze /path/to/project \
   --out graph.json
 ```
 
-Guide suggestions are validated against scanned symbols. Invalid suggestions become warnings. Suggestions already discovered by static analysis are not duplicated.
+Guide suggestions are validated for required fields and against scanned symbols. Invalid suggestions become warnings. Suggestions already discovered by static analysis are not duplicated.
 
 ### Include tests
 
