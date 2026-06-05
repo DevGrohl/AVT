@@ -216,8 +216,9 @@ The analyzer currently detects:
 - `self.method()` calls in the current class;
 - directly instantiated local method calls:
   - `svc = Service(); svc.run()`;
-- type-hint-based method calls:
+- type-hint-based method calls for locals and parameters:
   - `svc: Service; svc.run()`;
+  - `def route(service: Service = Depends()): service.run()`;
 - simple argparse dispatch:
   - `parser.set_defaults(func=handler)`;
   - `args.func(args)`;

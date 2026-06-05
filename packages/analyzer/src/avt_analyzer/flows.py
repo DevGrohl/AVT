@@ -282,6 +282,14 @@ def _resolve_call(
 
 def _collect_variable_types(context: _AnalysisContext, function: FunctionInfo) -> dict[str, str]:
     variable_types: dict[str, str] = {}
+    for arg in [*function.node.args.posonlyargs, *function.node.args.args, *function.node.args.kwonlyargs]:
+        if arg.annotation is None:
+            continue
+        annotation = ast.unparse(arg.annotation)
+        expanded_annotation = _expanded_call_name(context, function, annotation)
+        if _is_known_class(context, expanded_annotation):
+            variable_types[arg.arg] = f"hint:{expanded_annotation}"
+
     for node in ast.walk(function.node):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)) and node is not function.node:
             continue

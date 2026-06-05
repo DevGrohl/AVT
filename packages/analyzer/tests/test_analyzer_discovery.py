@@ -358,6 +358,50 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertTrue(any(edge["target"].endswith("packages/tool/src/my_tool/helpers.py:Worker.run") for edge in graph["edges"]))
         self.assertTrue(any(edge["target"].endswith("packages/tool/src/my_tool/helpers.py:finish") for edge in graph["edges"]))
 
+    def test_cli_resolves_type_hint_method_calls_on_parameters(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    from services import AccountService
+
+                    @router.post('/accounts')
+                    def create_account(service: AccountService = Depends()):
+                        return service.create_account()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "services.py").write_text(
+                textwrap.dedent(
+                    """
+                    class AccountService:
+                        def create_account(self):
+                            self.persist()
+
+                        def persist(self):
+                            pass
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        reason_codes = {edge["evidence"]["reason"]["code"] for edge in graph["edges"]}
+        self.assertGreaterEqual(reason_codes, {"type_hint_method_call", "self_method_call"})
+        self.assertTrue(any(edge["target"].endswith("services.py:AccountService.create_account") for edge in graph["edges"]))
+        self.assertTrue(any(edge["target"].endswith("services.py:AccountService.persist") for edge in graph["edges"]))
+        self.assertGreaterEqual(len(graph["flows"][0]["node_ids"]), 3)
+
     def test_cli_resolves_self_instantiated_and_type_hint_method_calls(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)
