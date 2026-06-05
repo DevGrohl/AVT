@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 from typing import Iterable
 
@@ -118,6 +118,7 @@ def discover_entry_points(scan: ScanResult, *, manual_entries: Iterable[str] = (
                 if reason is None:
                     continue
                 kind, code, label, route_path, http_methods = reason
+                route_path = _full_route_path(python_file.relative_path, decorator, route_path, scan.files)
                 _add_candidate(candidates, seen, kind, fn, decorator, code, label, route_path, http_methods)
 
         for call in _main_guard_calls(python_file.tree):
@@ -306,6 +307,100 @@ def _http_methods(decorator_name: str, decorator: ast.expr) -> tuple[str, ...]:
     return ()
 
 
+def _full_route_path(relative_path: str, decorator: ast.expr, route_path: str | None, files: tuple[PythonFile, ...]) -> str | None:
+    if route_path is None:
+        return None
+    router_name = _decorator_root_name(decorator)
+    if router_name is None:
+        return route_path
+    full_prefixes = _router_full_prefixes(files)
+    prefix = full_prefixes.get((relative_path, router_name), "")
+    return _join_route_paths(prefix, route_path)
+
+
+def _decorator_root_name(decorator: ast.expr) -> str | None:
+    target = decorator.func if isinstance(decorator, ast.Call) else decorator
+    while isinstance(target, ast.Attribute):
+        target = target.value
+    if isinstance(target, ast.Name):
+        return target.id
+    return None
+
+
+def _router_full_prefixes(files: tuple[PythonFile, ...]) -> dict[tuple[str, str], str]:
+    router_prefixes: dict[tuple[str, str], str] = {}
+    import_aliases: dict[str, dict[str, tuple[str, str]]] = {}
+    module_path_by_qualified = {ModuleInfo(file.relative_path, file.tree).qualified_name: file.relative_path for file in files}
+    include_edges: list[tuple[tuple[str, str] | None, tuple[str, str], str]] = []
+
+    for file in files:
+        local_imports: dict[str, tuple[str, str]] = {}
+        for stmt in file.tree.body:
+            if isinstance(stmt, ast.ImportFrom) and stmt.module is not None:
+                module_path = module_path_by_qualified.get(stmt.module)
+                if module_path is None:
+                    continue
+                for alias in stmt.names:
+                    local_imports[alias.asname or alias.name] = (module_path, alias.name)
+        import_aliases[file.relative_path] = local_imports
+
+    for file in files:
+        for stmt in ast.walk(file.tree):
+            if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call) and _called_name(stmt.value) == "APIRouter":
+                prefix = _string_keyword(stmt.value, "prefix") or ""
+                for target in stmt.targets:
+                    if isinstance(target, ast.Name):
+                        router_prefixes[(file.relative_path, target.id)] = prefix
+            elif isinstance(stmt, ast.Call) and _method_name(stmt.func) == "include_router" and stmt.args:
+                parent_name = _include_router_parent_name(stmt)
+                parent = (file.relative_path, parent_name) if parent_name in {name for path, name in router_prefixes if path == file.relative_path} else None
+                child = _router_identity(file.relative_path, stmt.args[0], import_aliases.get(file.relative_path, {}))
+                if child is None:
+                    continue
+                include_edges.append((parent, child, _string_keyword(stmt, "prefix") or ""))
+
+    full: dict[tuple[str, str], str] = {}
+    changed = True
+    while changed:
+        changed = False
+        for parent, child, include_prefix in include_edges:
+            if parent is not None and parent not in full:
+                continue
+            parent_prefix = full.get(parent, "") if parent is not None else ""
+            next_prefix = _join_route_paths(parent_prefix, include_prefix, router_prefixes.get(child, ""))
+            if full.get(child) != next_prefix:
+                full[child] = next_prefix
+                changed = True
+    return {**router_prefixes, **full}
+
+
+def _include_router_parent_name(call: ast.Call) -> str:
+    if isinstance(call.func, ast.Attribute) and isinstance(call.func.value, ast.Name):
+        return call.func.value.id
+    return ""
+
+
+def _router_identity(relative_path: str, node: ast.AST, imports: dict[str, tuple[str, str]]) -> tuple[str, str] | None:
+    if isinstance(node, ast.Name):
+        return imports.get(node.id) or (relative_path, node.id)
+    return None
+
+
+def _string_keyword(call: ast.Call, keyword_name: str) -> str | None:
+    for keyword in call.keywords:
+        if keyword.arg == keyword_name and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+            return keyword.value.value
+    return None
+
+
+def _join_route_paths(*parts: str) -> str:
+    cleaned = [part.strip("/") for part in parts if part]
+    if not cleaned:
+        return "/"
+    joined = "/".join(part for part in cleaned if part)
+    return f"/{joined}" if joined else "/"
+
+
 def _string_list_keyword(call: ast.Call, keyword_name: str) -> tuple[str, ...]:
     for keyword in call.keywords:
         if keyword.arg == keyword_name:
@@ -327,6 +422,12 @@ def _string_list(node: ast.AST) -> tuple[str, ...]:
 
 def _called_name(call: ast.Call) -> str | None:
     return _dotted_name(call.func)
+
+
+def _method_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
 
 
 def _dotted_name(node: ast.AST) -> str | None:

@@ -101,6 +101,47 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertIn(("web_route", "views.py", "PageViewSet.publish"), entries)
         self.assertEqual(publish.http_methods, ("POST",))
 
+    def test_composes_fastapi_router_prefixes_into_route_paths(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app").mkdir()
+            (root / "app" / "__init__.py").write_text("", encoding="utf-8")
+            (root / "app" / "endpoints.py").write_text(
+                textwrap.dedent(
+                    """
+                    from fastapi import APIRouter
+
+                    router = APIRouter()
+
+                    @router.get('/{id}')
+                    def get_item(id: int):
+                        return None
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "app" / "main.py").write_text(
+                textwrap.dedent(
+                    """
+                    from fastapi import APIRouter, FastAPI
+                    from app.endpoints import router as item_router
+
+                    app = FastAPI()
+                    api_router = APIRouter(prefix='/api')
+                    api_router.include_router(item_router, prefix='/items')
+                    app.include_router(api_router)
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+
+            scan = scan_python_project(root)
+            discovery = discover_entry_points(scan)
+
+        entry = next(entry for entry in discovery.entry_points if entry.function.qualified_name == "get_item")
+        self.assertEqual(entry.route_path, "/api/items/{id}")
+        self.assertEqual(entry.label, "GET /api/items/{id}: app/endpoints.py:get_item")
+
     def test_cli_resolves_fastapi_dependency_edges(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

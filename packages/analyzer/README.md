@@ -280,7 +280,7 @@ Top-level JSON keys:
 Important conventions:
 
 - paths are relative to the analyzed project;
-- web route Entry Points include best-effort decorator HTTP method/path metadata when statically available;
+- web route Entry Points include best-effort HTTP method/path metadata when statically available, including composed FastAPI `APIRouter(prefix=...)` and `include_router(..., prefix=...)` prefixes;
 - no source snippets or full source code are embedded;
 - output ordering is deterministic;
 - `--no-timestamp` omits generated timestamps;
