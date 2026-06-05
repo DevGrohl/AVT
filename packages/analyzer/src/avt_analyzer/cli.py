@@ -52,6 +52,7 @@ def analyze_command(args: argparse.Namespace) -> int:
         analyzer_version=__version__,
         discovery=discovery,
         include_timestamp=not args.no_timestamp,
+        max_depth=args.max_depth,
     )
     graph["warnings"] = [*scan.warnings, *graph["warnings"]]
 

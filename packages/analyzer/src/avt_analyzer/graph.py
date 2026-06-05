@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from avt_analyzer.entrypoints import DiscoveryResult
+from avt_analyzer.flows import analyze_flows
 from avt_analyzer.schema import ExecutionFlowGraph, GraphNode
 
 SCHEMA_VERSION = "0.1.0"
@@ -36,6 +37,7 @@ def build_discovery_graph(
     analyzer_version: str,
     discovery: DiscoveryResult,
     include_timestamp: bool = True,
+    max_depth: int = 6,
 ) -> ExecutionFlowGraph:
     """Build a deterministic graph containing hierarchy nodes and Entry Points."""
 
@@ -90,6 +92,8 @@ def build_discovery_graph(
         nodes.append(node)
 
     graph["nodes"] = nodes
+    flow_analysis = analyze_flows(discovery, max_depth=max_depth)
+
     graph["entry_points"] = [
         {
             "id": entry.id,
@@ -100,13 +104,15 @@ def build_discovery_graph(
         }
         for entry in discovery.entry_points
     ]
+    graph["edges"] = list(flow_analysis.edges)
+    graph["markers"] = list(flow_analysis.markers)
     graph["flows"] = [
         {
             "id": f"flow:{entry.id}",
             "entry_point_id": entry.id,
-            "node_ids": [entry.function.node_id],
-            "edge_ids": [],
-            "marker_ids": [],
+            "node_ids": flow_analysis.flow_node_ids.get(entry.id, [entry.function.node_id]),
+            "edge_ids": flow_analysis.flow_edge_ids.get(entry.id, []),
+            "marker_ids": flow_analysis.flow_marker_ids.get(entry.id, []),
         }
         for entry in discovery.entry_points
     ]

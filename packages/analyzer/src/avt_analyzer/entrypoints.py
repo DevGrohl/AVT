@@ -43,6 +43,7 @@ class ClassInfo:
 @dataclass(frozen=True)
 class ModuleInfo:
     relative_path: str
+    tree: ast.Module
 
     @property
     def qualified_name(self) -> str:
@@ -88,7 +89,7 @@ def discover_entry_points(scan: ScanResult, *, manual_entries: Iterable[str] = (
     warnings: list[GraphWarning] = []
 
     for python_file in scan.files:
-        modules.append(ModuleInfo(python_file.relative_path))
+        modules.append(ModuleInfo(python_file.relative_path, python_file.tree))
         file_classes, file_functions = _collect_symbols(python_file)
         classes.extend(file_classes)
         functions.extend(file_functions)

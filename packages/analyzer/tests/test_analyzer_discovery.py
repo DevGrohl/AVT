@@ -93,6 +93,110 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertEqual(graph["entry_points"][0]["kind"], "web_route")
         self.assertEqual(graph["flows"][0]["node_ids"], [graph["entry_points"][0]["node_id"]])
 
+    def test_cli_follows_confirmed_local_calls_and_awaits(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @router.post('/submit')
+                    async def submit():
+                        validate()
+                        await persist()
+
+                    def validate():
+                        for item in []:
+                            if item:
+                                return item
+                        raise ValueError('invalid')
+
+                    async def persist():
+                        pass
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        edge_kinds = {(edge["kind"], edge["certainty"], edge["evidence"]["reason"]["code"]) for edge in graph["edges"]}
+        self.assertIn(("call", "confirmed", "same_module_call"), edge_kinds)
+        self.assertIn(("await", "confirmed", "same_module_call"), edge_kinds)
+        self.assertEqual(len(graph["flows"][0]["edge_ids"]), 2)
+        self.assertEqual(len(graph["flows"][0]["node_ids"]), 3)
+        marker_kinds = {marker["kind"] for marker in graph["markers"]}
+        self.assertGreaterEqual(marker_kinds, {"async", "loop", "conditional", "return", "raise"})
+        self.assertEqual(set(graph["flows"][0]["marker_ids"]), {marker["id"] for marker in graph["markers"]})
+
+    def test_cli_resolves_imported_local_functions(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    import helpers
+                    from more_helpers import finish
+
+                    @app.get('/')
+                    def home():
+                        helpers.prepare()
+                        finish()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "helpers.py").write_text("def prepare():\n    pass\n", encoding="utf-8")
+            (root / "more_helpers.py").write_text("def finish():\n    pass\n", encoding="utf-8")
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        reason_codes = {edge["evidence"]["reason"]["code"] for edge in graph["edges"]}
+        self.assertEqual(reason_codes, {"imported_module_call", "imported_function_call"})
+        self.assertTrue(all(edge["certainty"] == "confirmed" for edge in graph["edges"]))
+
+    def test_cli_emits_uncertain_edges_for_ambiguous_local_names(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @app.get('/')
+                    def home():
+                        process()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "one.py").write_text("def process():\n    pass\n", encoding="utf-8")
+            (root / "two.py").write_text("def process():\n    pass\n", encoding="utf-8")
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        uncertain = [edge for edge in graph["edges"] if edge["certainty"] == "uncertain"]
+        self.assertEqual(len(uncertain), 2)
+        self.assertTrue(all(edge["evidence"]["reason"]["code"] == "ambiguous_name_call" for edge in uncertain))
+
 
 if __name__ == "__main__":
     unittest.main()

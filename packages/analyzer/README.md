@@ -17,8 +17,12 @@ Implemented Phase 1 foundations:
 - `--include-tests` opt-in for test files;
 - parse/decode/read warnings in graph output;
 - Entry Point discovery for common web route decorators, Click/Typer-style command decorators, `if __name__ == "__main__"`, shebangs, `__main__.py`, and `scripts/`, `bin/`, or `tools/` files;
-- manual Entry Point selection with `--entry`.
+- manual Entry Point selection with `--entry`;
+- local call traversal from Entry Points up to `--max-depth`;
+- confirmed `call` and `await` edges for same-module and imported local functions;
+- basic `uncertain` edges when an unqualified call name ambiguously matches multiple local functions;
+- reachable Flow Markers for async functions, conditionals, loops, raises, and returns.
 
-The analyzer currently builds hierarchy/function nodes and one shallow Execution Flow per discovered Entry Point. Full call traversal comes next.
+The analyzer currently builds hierarchy/function nodes and first-pass Execution Flows. External Interactions and advanced method/dynamic dispatch come next.
 
 This package is intentionally CLI/library-first. A backend API can wrap it later.
