@@ -11,6 +11,7 @@ from avt_analyzer import __version__
 from avt_analyzer.entrypoints import discover_entry_points
 from avt_analyzer.graph import build_discovery_graph
 from avt_analyzer.overlay import apply_overlay, load_overlay
+from avt_analyzer.safety import scan_safety
 from avt_analyzer.scanner import scan_python_project
 
 
@@ -55,7 +56,7 @@ def analyze_command(args: argparse.Namespace) -> int:
         include_timestamp=not args.no_timestamp,
         max_depth=args.max_depth,
     )
-    graph["warnings"] = [*scan.warnings, *graph["warnings"]]
+    graph["warnings"] = [*scan.warnings, *scan_safety(scan), *graph["warnings"]]
     if overlay is not None:
         apply_overlay(graph, load_overlay(overlay))
 

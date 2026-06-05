@@ -1,0 +1,77 @@
+{
+  "metadata": {
+    "analyzer_version": "0.1.0",
+    "project_name": "sample",
+    "schema_version": "0.1.0"
+  },
+  "entry_points": [
+    {
+      "id": "entry:web_route:app.py:home:1",
+      "kind": "web_route",
+      "node_id": "node:function:app.py:home",
+      "label": "web_route: app.py:home",
+      "evidence": {
+        "location": {"path": "app.py", "line": 1, "column": 0},
+        "reason": {"code": "web_route_decorator", "label": "Web route decorator @app.get"}
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow:entry:web_route:app.py:home:1",
+      "entry_point_id": "entry:web_route:app.py:home:1",
+      "node_ids": ["node:external:network:requests.get", "node:function:app.py:home"],
+      "edge_ids": ["edge:external_interaction:confirmed:node:function:app.py:home->node:external:network:requests.get:3:4"],
+      "marker_ids": ["marker:return:node:function:app.py:home:4:4"]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "node:external:network:requests.get",
+      "kind": "external",
+      "label": "network: requests.get",
+      "qualified_name": "requests.get"
+    },
+    {
+      "id": "node:function:app.py:home",
+      "kind": "function",
+      "label": "home",
+      "path": "app.py",
+      "qualified_name": "home",
+      "signature": "home()",
+      "parent_id": "node:module:app.py"
+    },
+    {
+      "id": "node:module:app.py",
+      "kind": "module",
+      "label": "app",
+      "path": "app.py",
+      "qualified_name": "app"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge:external_interaction:confirmed:node:function:app.py:home->node:external:network:requests.get:3:4",
+      "kind": "external_interaction",
+      "source": "node:function:app.py:home",
+      "target": "node:external:network:requests.get",
+      "certainty": "confirmed",
+      "evidence": {
+        "location": {"path": "app.py", "line": 3, "column": 4},
+        "reason": {"code": "network_call", "label": "HTTP/network interaction via requests.get()"}
+      }
+    }
+  ],
+  "markers": [
+    {
+      "id": "marker:return:node:function:app.py:home:4:4",
+      "kind": "return",
+      "node_id": "node:function:app.py:home",
+      "evidence": {
+        "location": {"path": "app.py", "line": 4, "column": 4},
+        "reason": {"code": "return", "label": "Function returns"}
+      }
+    }
+  ],
+  "warnings": []
+}

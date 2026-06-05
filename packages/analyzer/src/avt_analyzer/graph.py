@@ -92,7 +92,7 @@ def build_discovery_graph(
         nodes.append(node)
 
     flow_analysis = analyze_flows(discovery, max_depth=max_depth)
-    graph["nodes"] = [*nodes, *flow_analysis.external_nodes]
+    graph["nodes"] = sorted([*nodes, *flow_analysis.external_nodes], key=lambda node: node["id"])
 
     graph["entry_points"] = [
         {

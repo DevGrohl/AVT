@@ -355,7 +355,7 @@ def _external_interaction(call_name: str, call: ast.Call) -> tuple[str, str, str
     normalized = call_name.lower()
     attr = _method_name(call.func)
 
-    if normalized in {"open", "path"} or normalized.startswith(("os.", "pathlib.", "shutil.")):
+    if normalized == "open" or normalized.startswith("shutil."):
         return "filesystem", "filesystem_call", f"Filesystem interaction via {call_name}()"
     if attr in {"read_text", "write_text", "read_bytes", "write_bytes", "open", "mkdir", "unlink", "rmdir", "rename", "replace", "glob", "rglob", "iterdir", "exists", "stat"}:
         return "filesystem", "filesystem_method_call", f"Filesystem interaction via .{attr}()"

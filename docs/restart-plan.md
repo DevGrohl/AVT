@@ -135,6 +135,7 @@ See ADRs:
 
 - `docs/adr/0001-restart-as-monorepo.md`
 - `docs/adr/0002-cli-static-json-before-api.md`
+- `docs/adr/0003-use-react-flow-for-phase-1-viewer.md`
 
 ## Restart Phase 1 Success
 

@@ -24,7 +24,8 @@ Implemented Phase 1 foundations:
 - reachable Flow Markers for async functions, conditionals, loops, raises, and returns;
 - External Interaction nodes and edges for filesystem, subprocess/shell, HTTP/network, and database-ish calls;
 - method call resolution for `self.method()`, directly instantiated locals, and type-hint-based locals;
-- uncertain method edges when a type name ambiguously matches multiple local classes.
+- uncertain method edges when a type name ambiguously matches multiple local classes;
+- output-safety warnings for environment variable references and secret-looking literals, without emitting raw secret values.
 
 Analysis Overlay support:
 
@@ -39,6 +40,8 @@ Analysis Overlay support:
 
 Use `--overlay path` or place the file at `<project>/.avt/overlay.json`. Overlay resolutions apply only to uncertain edges.
 
-The analyzer currently builds hierarchy/function nodes and first-pass Execution Flows. Safety/redaction and schema hardening come next.
+Graph hardening includes a sample graph fixture, graph contract tests, deterministic ID ordering checks, and `--no-timestamp` reproducibility coverage.
+
+The analyzer currently builds hierarchy/function nodes and first-pass Execution Flows. Viewer/spike work comes next.
 
 This package is intentionally CLI/library-first. A backend API can wrap it later.

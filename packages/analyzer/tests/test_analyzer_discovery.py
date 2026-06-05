@@ -384,6 +384,50 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertEqual(set(graph["flows"][0]["edge_ids"]), {edge["id"] for edge in external_edges})
         self.assertTrue(set(graph["flows"][0]["node_ids"]).issuperset({node["id"] for node in external_nodes}))
 
+    def test_cli_safety_warnings_redact_secret_literals_and_include_env_names(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            secret_value = "super-secret-token-value"
+            docstring_secret = "docstring-secret-value"
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    f'''
+                    import os
+
+                    """Module docstring mentions {docstring_secret} but is ignored."""
+
+                    @app.get('/')
+                    def home():
+                        """Function docstring mentions {docstring_secret} but is ignored."""
+                        api_token = "{secret_value}"
+                        settings = {{"password": "{secret_value}"}}
+                        os.getenv("DATABASE_URL")
+                        os.environ["API_TOKEN"]
+                    '''
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            raw_graph = out.read_text(encoding="utf-8")
+            graph = json.loads(raw_graph)
+
+        warning_codes = {warning["code"] for warning in graph["warnings"]}
+        messages = {warning["message"] for warning in graph["warnings"]}
+
+        self.assertIn("secret_literal_redacted", warning_codes)
+        self.assertIn("env_var_reference", warning_codes)
+        self.assertIn("Environment variable referenced: DATABASE_URL", messages)
+        self.assertIn("Environment variable referenced: API_TOKEN", messages)
+        self.assertNotIn(secret_value, raw_graph)
+        self.assertNotIn(docstring_secret, raw_graph)
+
     def test_cli_emits_uncertain_edges_for_ambiguous_local_names(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)
