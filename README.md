@@ -207,6 +207,7 @@ npm run build
 
 - `CONTEXT.md` — project language/glossary.
 - `docs/restart-plan.md` — Phase 1 restart plan.
+- `docs/phase2-llm-guide-plan.md` — Phase 2 LLM Guide plan.
 - `docs/development.md` — local development commands.
 - `docs/adr/` — architecture decisions.
 - `docs/validation/` — validation notes and QA artifacts.

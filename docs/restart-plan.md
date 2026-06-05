@@ -145,3 +145,14 @@ First milestone: analyze one real Python repo and display one useful Execution F
 Useful means a Developer can explain the behavior path from Entry Point to major outcomes/interactions after using the viewer.
 
 Confirmed calls should be correct when spot-checked. No percentage accuracy target yet.
+
+## Phase 1 Readiness Status
+
+As of 2026-06-05, Phase 1 is ready to transition into Phase 2 planning/implementation:
+
+- RealtorCareersAPI is the primary realistic validation target.
+- Static discovery finds web routes, framework hooks, CLI commands, scripts, route metadata, FastAPI router prefixes, and FastAPI dependency aliases.
+- The viewer supports selected flows/groups, multiple diagram layouts, diagram handling controls, edge filters, and node/edge inspection.
+- Analyzer tests and viewer builds are passing.
+
+See `docs/phase2-llm-guide-plan.md` for the next phase.
