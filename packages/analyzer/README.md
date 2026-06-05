@@ -223,6 +223,9 @@ The analyzer currently detects:
 - simple argparse dispatch:
   - `parser.set_defaults(func=handler)`;
   - `args.func(args)`;
+- explicit FastAPI dependency calls:
+  - `Depends(get_current_user)`;
+  - `Annotated[User, Depends(get_current_user)]`;
 - `await` edges;
 - ambiguous unqualified calls as Uncertain Edges;
 - ambiguous type-based method dispatch as Uncertain Edges.

@@ -23,9 +23,9 @@ python -m json.tool /tmp/avt-realtor.json >/dev/null
 - Files scanned: 62
 - Entry Points found: 52
 - Flows analyzed: 52
-- Nodes: 281
-- Edges: 258
-- Markers: 417
+- Nodes: 281 before FastAPI dependency resolution; 282 after FastAPI dependency resolution
+- Edges: 258 before FastAPI dependency resolution; 267 after FastAPI dependency resolution
+- Markers: 417 before FastAPI dependency resolution; 432 after FastAPI dependency resolution
 - Warnings: 8
 
 Node kinds:
@@ -38,9 +38,9 @@ Node kinds:
 
 Edge kinds:
 
-- external_interaction: 174
+- external_interaction: 174 before FastAPI dependency resolution; 177 after FastAPI dependency resolution
 - await: 77
-- call: 7
+- call: 7 before FastAPI dependency resolution; 13 after FastAPI dependency resolution
 
 Certainty:
 
@@ -50,12 +50,26 @@ Certainty:
 
 Top edge evidence reasons:
 
+Initial top edge evidence reasons:
+
 - database_method_call: 84
 - database_call: 64
 - type_hint_method_call: 49
 - orm_method_call: 23
 - self_method_call: 18
 - imported_module_call: 12
+- imported_function_call: 5
+- filesystem_call: 3
+
+After FastAPI dependency resolution:
+
+- database_method_call: 86
+- database_call: 65
+- type_hint_method_call: 50
+- orm_method_call: 23
+- self_method_call: 18
+- imported_module_call: 12
+- fastapi_dependency_call: 5
 - imported_function_call: 5
 - filesystem_call: 3
 
@@ -82,6 +96,20 @@ Warnings were output-safety warnings only:
 - one secret-looking literal redaction for `SECRET_KEY`.
 
 No source values were emitted.
+
+## FastAPI dependency resolution hardening
+
+Validation showed that explicit FastAPI dependencies such as `Depends(get_current_active_user)` were part of the runtime Execution Flow but were not represented. AVT now emits `fastapi_dependency_call` edges for explicit dependency functions passed to `Depends(...)`, including `Annotated[..., Depends(...)]` annotations.
+
+Observed dependency edges after the fix:
+
+- `run_seeder -> get_session`
+- `run_seeder -> get_current_active_user`
+- `read_users_me -> get_current_active_user`
+- `get_current_active_user -> get_current_user`
+- `get_current_user -> get_session`
+
+This makes authentication/session setup visible in protected endpoint flows.
 
 ## Follow-up validation questions
 

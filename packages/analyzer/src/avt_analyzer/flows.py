@@ -180,6 +180,25 @@ def _calls_from_function(context: _AnalysisContext, function: FunctionInfo) -> l
             call_name = _method_name(call.func)
         if call_name is None:
             continue
+        dependency_name = _fastapi_dependency_name(call_name, call)
+        if dependency_name is not None:
+            targets = _resolve_call(context, function, dependency_name, variable_types=variable_types)
+            for target, certainty, _, _ in targets:
+                edge = _build_edge(
+                    function,
+                    target,
+                    call,
+                    "call",
+                    certainty,
+                    "fastapi_dependency_call",
+                    f"Resolved FastAPI dependency Depends({dependency_name})",
+                )
+                if edge["id"] in seen:
+                    continue
+                seen.add(edge["id"])
+                edges.append(FlowEdge(edge=edge, target=target))
+            continue
+
         targets = _resolve_call(context, function, call_name, variable_types=variable_types)
         for target, certainty, reason_code, reason_label in targets:
             kind: EdgeKind = "await" if is_await else "call"
@@ -200,6 +219,17 @@ def _calls_from_function(context: _AnalysisContext, function: FunctionInfo) -> l
             seen.add(edge["id"])
             edges.append(FlowEdge(edge=edge, target=None))
     return sorted(edges, key=lambda item: item.edge["id"])
+
+
+def _fastapi_dependency_name(call_name: str, call: ast.Call) -> str | None:
+    if call_name.rsplit(".", 1)[-1] != "Depends":
+        return None
+    dependency: ast.AST | None = call.args[0] if call.args else None
+    if dependency is None:
+        dependency = next((keyword.value for keyword in call.keywords if keyword.arg == "dependency"), None)
+    if dependency is None:
+        return None
+    return _dotted_name(dependency)
 
 
 def _expanded_call_name(context: _AnalysisContext, function: FunctionInfo, call_name: str) -> str:
