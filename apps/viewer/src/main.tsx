@@ -17,10 +17,17 @@ interface EdgeFilters {
   showRejected: boolean;
 }
 
+interface FlowSelectionOption {
+  id: string;
+  label: string;
+  kind: 'entry' | 'group';
+  entryPointIds: string[];
+}
+
 function App() {
   const [graph, setGraph] = useState<ExecutionFlowGraph | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedEntryPointId, setSelectedEntryPointId] = useState<string>('');
+  const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [edgeFilters, setEdgeFilters] = useState<EdgeFilters>({ showConfirmed: true, showUncertain: true, showRejected: false });
 
@@ -28,20 +35,27 @@ function App() {
     loadSampleGraph()
       .then((sample) => {
         setGraph(sample);
-        setSelectedEntryPointId(sample.entry_points[0]?.id ?? '');
+        setSelectedSelectionId(defaultSelectionId(sample));
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
   }, []);
 
+  const selectionOptions = useMemo(() => graph ? buildSelectionOptions(graph) : [], [graph]);
+
+  const selectedOption = useMemo(() => {
+    if (!selectionOptions.length) return null;
+    return selectionOptions.find((option) => option.id === selectedSelectionId) ?? selectionOptions[0];
+  }, [selectionOptions, selectedSelectionId]);
+
   const selectedFlow = useMemo(() => {
-    if (!graph) return null;
-    return graph.flows.find((flow) => flow.entry_point_id === selectedEntryPointId) ?? graph.flows[0] ?? null;
-  }, [graph, selectedEntryPointId]);
+    if (!graph || !selectedOption) return null;
+    return buildSelectedFlow(graph, selectedOption);
+  }, [graph, selectedOption]);
 
   const selectedEntryPoint = useMemo(() => {
-    if (!graph || !selectedFlow) return null;
-    return graph.entry_points.find((entry) => entry.id === selectedFlow.entry_point_id) ?? null;
-  }, [graph, selectedFlow]);
+    if (!graph || !selectedOption || selectedOption.kind !== 'entry') return null;
+    return graph.entry_points.find((entry) => entry.id === selectedOption.entryPointIds[0]) ?? null;
+  }, [graph, selectedOption]);
 
   const flowModel = useMemo(() => {
     if (!graph || !selectedFlow) return emptyFlowModel();
@@ -56,7 +70,7 @@ function App() {
     try {
       const nextGraph = await parseGraph(await file.text());
       setGraph(nextGraph);
-      setSelectedEntryPointId(nextGraph.entry_points[0]?.id ?? '');
+      setSelectedSelectionId(defaultSelectionId(nextGraph));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -81,20 +95,21 @@ function App() {
           <aside className="panel sidebar">
             <GraphSummary graph={graph} />
 
-            <label className="selectLabel" htmlFor="entryPoint">Selected Entry Point</label>
+            <label className="selectLabel" htmlFor="entryPoint">Selected Entry Point / Group</label>
             <select
               id="entryPoint"
-              value={selectedEntryPointId}
+              value={selectedOption?.id ?? ''}
               onChange={(event) => {
-                setSelectedEntryPointId(event.target.value);
+                setSelectedSelectionId(event.target.value);
                 setSelection(null);
               }}
             >
-              {graph.entry_points.map((entry) => (
-                <option key={entry.id} value={entry.id}>{entry.label}</option>
+              {selectionOptions.map((option) => (
+                <option key={option.id} value={option.id}>{option.label}</option>
               ))}
             </select>
 
+            {selectedOption?.kind === 'group' ? <GroupSummary option={selectedOption} /> : null}
             {selectedEntryPoint ? <EntryPointSummary entryPoint={selectedEntryPoint} /> : null}
             <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
             <Inspector selection={selection} />
@@ -103,7 +118,7 @@ function App() {
           <section className="panel flowPanel">
             {selectedFlow ? (
               <>
-                <FlowHeader flow={selectedFlow} nodeCount={flowModel.flowNodes.length} edgeCount={flowModel.flowEdges.length} />
+                <FlowHeader flow={selectedFlow} label={selectedOption?.label ?? selectedFlow.id} nodeCount={flowModel.flowNodes.length} edgeCount={flowModel.flowEdges.length} />
                 <div className="graphCanvas" aria-label="Selected Execution Flow graph">
                   <ReactFlow
                     nodes={flowModel.reactFlowNodes}
@@ -154,6 +169,16 @@ function GraphSummary({ graph }: { graph: ExecutionFlowGraph }) {
   );
 }
 
+function GroupSummary({ option }: { option: FlowSelectionOption }) {
+  return (
+    <section className="summaryBlock">
+      <h3>Entry Point Group</h3>
+      <p><strong>{option.label}</strong></p>
+      <p>{option.entryPointIds.length} Entry Points combined.</p>
+    </section>
+  );
+}
+
 function EntryPointSummary({ entryPoint }: { entryPoint: EntryPoint }) {
   return (
     <section className="summaryBlock">
@@ -176,12 +201,12 @@ function EdgeFilterControls({ filters, onChange }: { filters: EdgeFilters; onCha
   );
 }
 
-function FlowHeader({ flow, nodeCount, edgeCount }: { flow: ExecutionFlow; nodeCount: number; edgeCount: number }) {
+function FlowHeader({ flow, label, nodeCount, edgeCount }: { flow: ExecutionFlow; label: string; nodeCount: number; edgeCount: number }) {
   return (
     <div className="flowHeader">
       <div>
         <p className="eyebrow">Selected Execution Flow</p>
-        <h2>{flow.id}</h2>
+        <h2>{label}</h2>
       </div>
       <div className="counts">
         <span>{nodeCount} visible nodes</span>
@@ -266,6 +291,80 @@ function Inspector({ selection }: { selection: InspectorSelection }) {
   );
 }
 
+function defaultSelectionId(graph: ExecutionFlowGraph): string {
+  const options = buildSelectionOptions(graph);
+  return options[0]?.id ?? '';
+}
+
+function buildSelectionOptions(graph: ExecutionFlowGraph): FlowSelectionOption[] {
+  const entryOptions: FlowSelectionOption[] = graph.entry_points.map((entry) => ({
+    id: `entry:${entry.id}`,
+    label: entry.label,
+    kind: 'entry',
+    entryPointIds: [entry.id],
+  }));
+
+  const webRoutes = graph.entry_points.filter((entry) => entry.kind === 'web_route');
+  const groupOptions: FlowSelectionOption[] = [];
+  const byDirectory = groupBy(webRoutes, (entry) => directoryName(entry.evidence.location.path));
+  const byFile = groupBy(webRoutes, (entry) => entry.evidence.location.path);
+
+  for (const [directory, entries] of [...byDirectory.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    if (entries.length < 2) continue;
+    groupOptions.push({
+      id: `group:dir:${directory}`,
+      label: `All web routes in ${directory}/* (${entries.length})`,
+      kind: 'group',
+      entryPointIds: entries.map((entry) => entry.id).sort(),
+    });
+  }
+
+  for (const [file, entries] of [...byFile.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    if (entries.length < 2) continue;
+    groupOptions.push({
+      id: `group:file:${file}`,
+      label: `All web routes in ${file} (${entries.length})`,
+      kind: 'group',
+      entryPointIds: entries.map((entry) => entry.id).sort(),
+    });
+  }
+
+  return [...groupOptions, ...entryOptions];
+}
+
+function buildSelectedFlow(graph: ExecutionFlowGraph, option: FlowSelectionOption): ExecutionFlow | null {
+  const flowsByEntryPointId = new Map(graph.flows.map((flow) => [flow.entry_point_id, flow]));
+  const selectedFlows = option.entryPointIds.map((entryPointId) => flowsByEntryPointId.get(entryPointId)).filter((flow): flow is ExecutionFlow => Boolean(flow));
+  if (!selectedFlows.length) return null;
+  if (option.kind === 'entry') return selectedFlows[0];
+
+  return {
+    id: option.id,
+    entry_point_id: option.id,
+    node_ids: sortedUnique(selectedFlows.flatMap((flow) => flow.node_ids)),
+    edge_ids: sortedUnique(selectedFlows.flatMap((flow) => flow.edge_ids)),
+    marker_ids: sortedUnique(selectedFlows.flatMap((flow) => flow.marker_ids)),
+  };
+}
+
+function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    grouped.set(key, [...(grouped.get(key) ?? []), item]);
+  }
+  return grouped;
+}
+
+function directoryName(path: string): string {
+  const index = path.lastIndexOf('/');
+  return index === -1 ? '.' : path.slice(0, index);
+}
+
+function sortedUnique(values: string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
 function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters: EdgeFilters) {
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const edgeById = new Map(graph.edges.map((edge) => [edge.id, edge]));
@@ -298,7 +397,7 @@ function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters:
     }
   }
 
-  const flowNodes = [...flowNodeIds].map((id) => nodeById.get(id)).filter((node): node is GraphNode => Boolean(node)).sort((a, b) => a.id.localeCompare(b.id));
+  const flowNodes = [...flowNodeIds].map((id) => nodeById.get(id)).filter((node): node is GraphNode => Boolean(node)).sort(compareHierarchyNodes);
   const flowEdges = [...visibleEdgeIds].map((id) => edgeById.get(id)).filter((edge): edge is GraphEdge => Boolean(edge)).sort((a, b) => a.id.localeCompare(b.id));
   const flowMarkers = flow.marker_ids.map((id) => markerById.get(id)).filter((marker): marker is FlowMarker => Boolean(marker));
 
@@ -308,9 +407,10 @@ function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters:
     markersByNodeId.set(marker.node_id, [...(markersByNodeId.get(marker.node_id) ?? []), marker]);
   }
 
-  const reactFlowNodes = flowNodes.map((node, index): FlowNode => ({
+  const positions = hierarchyPositions(flowNodes, nodeById);
+  const reactFlowNodes = flowNodes.map((node): FlowNode => ({
     id: node.id,
-    position: layoutPosition(index, node.kind),
+    position: positions.get(node.id) ?? { x: 0, y: 0 },
     data: {
       label: `${node.kind}: ${node.label}${markersByNodeId.has(node.id) ? ` • ${markersByNodeId.get(node.id)?.length} marker(s)` : ''}`,
     },
@@ -342,10 +442,77 @@ function emptyFlowModel() {
   };
 }
 
-function layoutPosition(index: number, kind: GraphNode['kind']) {
-  const column = kind === 'module' || kind === 'class' ? 0 : kind === 'external' ? 2 : 1;
-  const row = Math.floor(index / 3);
-  return { x: column * 320, y: row * 140 + (index % 3) * 24 };
+function compareHierarchyNodes(a: GraphNode, b: GraphNode): number {
+  return hierarchySortKey(a).localeCompare(hierarchySortKey(b));
+}
+
+function hierarchySortKey(node: GraphNode): string {
+  const path = node.path ?? '~external';
+  const kindOrder = node.kind === 'module' ? '0' : node.kind === 'class' ? '1' : node.kind === 'function' || node.kind === 'method' ? '2' : '3';
+  return `${path}:${kindOrder}:${node.parent_id ?? ''}:${node.qualified_name ?? node.label}:${node.id}`;
+}
+
+function hierarchyPositions(nodes: GraphNode[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const modules = nodes.filter((node) => node.kind === 'module');
+  const internals = nodes.filter((node) => node.kind !== 'module' && node.kind !== 'external');
+  const externals = nodes.filter((node) => node.kind === 'external');
+  let y = 0;
+
+  for (const module of modules) {
+    positions.set(module.id, { x: 0, y });
+    y += 96;
+
+    const moduleDescendants = internals.filter((node) => hasAncestor(node, module.id, nodeById));
+    const classes = moduleDescendants.filter((node) => node.kind === 'class');
+    const moduleFunctions = moduleDescendants.filter((node) => (node.kind === 'function' || node.kind === 'method') && directModuleParent(node, module.id, nodeById));
+
+    for (const fn of moduleFunctions) {
+      positions.set(fn.id, { x: 520, y });
+      y += 96;
+    }
+
+    for (const cls of classes) {
+      positions.set(cls.id, { x: 260, y });
+      y += 88;
+      const classMembers = moduleDescendants.filter((node) => (node.kind === 'function' || node.kind === 'method') && hasAncestor(node, cls.id, nodeById));
+      for (const member of classMembers) {
+        positions.set(member.id, { x: 520, y });
+        y += 96;
+      }
+    }
+
+    y += 32;
+  }
+
+  const positioned = new Set(positions.keys());
+  for (const node of internals.filter((item) => !positioned.has(item.id))) {
+    positions.set(node.id, { x: node.kind === 'class' ? 260 : 520, y });
+    y += 96;
+  }
+
+  externals.forEach((node, index) => {
+    positions.set(node.id, { x: 880, y: index * 120 });
+  });
+
+  return positions;
+}
+
+function hasAncestor(node: GraphNode, ancestorId: string, nodeById: Map<string, GraphNode>): boolean {
+  let current = node;
+  while (current.parent_id) {
+    if (current.parent_id === ancestorId) return true;
+    const parent = nodeById.get(current.parent_id);
+    if (!parent) return false;
+    current = parent;
+  }
+  return false;
+}
+
+function directModuleParent(node: GraphNode, moduleId: string, nodeById: Map<string, GraphNode>): boolean {
+  if (node.parent_id === moduleId) return true;
+  const parent = node.parent_id ? nodeById.get(node.parent_id) : undefined;
+  return parent?.kind === 'module' && parent.id === moduleId;
 }
 
 function nodeStyle(node: GraphNode): React.CSSProperties {

@@ -74,11 +74,19 @@ The left panel shows:
 - warning count;
 - secret warning count.
 
-### Entry Point selector
+### Entry Point / Group selector
 
-Use **Selected Entry Point** to choose which Execution Flow to inspect.
+Use **Selected Entry Point / Group** to choose what to inspect.
 
-The viewer shows one selected Execution Flow by default instead of rendering the whole project graph at once.
+The selector includes:
+
+- individual Entry Points;
+- grouped web route options by directory, such as `All web routes in app/api/endpoints/*`;
+- grouped web route options by file, such as `All web routes in app/api/endpoints/users.py`.
+
+Grouped options combine nodes, edges, and markers from all matching Entry Point flows. This is useful for API projects where a Developer wants to see all endpoints under one folder at once.
+
+The viewer still avoids rendering the whole project graph by default; it renders the selected Entry Point or selected Entry Point group.
 
 ### Graph canvas
 
@@ -98,7 +106,7 @@ Visible edge types include:
 - `await`;
 - `external_interaction`.
 
-Hierarchy context is shown by including ancestor module/class nodes for visible flow nodes.
+Hierarchy context is shown by including ancestor module/class nodes for visible flow nodes. The graph layout places modules on the left, classes in the middle, functions/methods to the right of their owner, and External Interactions further right.
 
 ### Inspector
 
@@ -158,9 +166,9 @@ Implemented:
 
 - load bundled sample graph;
 - load graph JSON with local file picker;
-- select Entry Points;
+- select individual Entry Points or grouped endpoint flows;
 - render selected Execution Flow with React Flow;
-- include hierarchy ancestor context;
+- include hierarchy ancestor context with hierarchy-aware layout;
 - style External Interactions and certainty states;
 - filter confirmed/uncertain/rejected edges;
 - inspect nodes and edges;
