@@ -106,7 +106,16 @@ Visible edge types include:
 - `await`;
 - `external_interaction`.
 
-Hierarchy context is shown by including ancestor module/class nodes for visible flow nodes. The graph layout places modules on the left, classes in the middle, functions/methods to the right of their owner, and External Interactions further right.
+Hierarchy context is shown by including ancestor module/class nodes for visible flow nodes.
+
+Use **Diagram layout** to switch how the same selected flow is drawn:
+
+- **Layered flow** — default flow-oriented view. Places roots on the left and reachable calls/interactions in later columns.
+- **Hierarchy by module/class** — ownership-oriented view. Places modules, classes, functions/methods, and External Interactions in structural columns.
+- **Circular relationships** — relationship overview for spotting clusters/cycles in dense graphs.
+- **Compact grid** — dense scan-friendly layout when labels/lists matter more than edge geometry.
+
+These options are inspired by database diagram tools such as DataGrip: the graph data stays the same, but layout handling changes depending on what the Developer is trying to understand.
 
 ### Inspector
 

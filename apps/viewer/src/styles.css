@@ -173,6 +173,13 @@ select {
   margin: 8px 0;
 }
 
+.hint {
+  margin: 8px 0 0;
+  color: #65708a;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .inspector code {
   display: block;
   margin: 8px 0;

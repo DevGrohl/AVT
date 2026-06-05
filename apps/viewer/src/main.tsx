@@ -11,6 +11,8 @@ type InspectorSelection =
   | { type: 'edge'; item: GraphEdge }
   | null;
 
+type DiagramLayout = 'hierarchy' | 'layered' | 'circular' | 'grid';
+
 interface EdgeFilters {
   showConfirmed: boolean;
   showUncertain: boolean;
@@ -30,6 +32,7 @@ function App() {
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [edgeFilters, setEdgeFilters] = useState<EdgeFilters>({ showConfirmed: true, showUncertain: true, showRejected: false });
+  const [diagramLayout, setDiagramLayout] = useState<DiagramLayout>('layered');
 
   useEffect(() => {
     loadSampleGraph()
@@ -59,8 +62,8 @@ function App() {
 
   const flowModel = useMemo(() => {
     if (!graph || !selectedFlow) return emptyFlowModel();
-    return buildFlowModel(graph, selectedFlow, edgeFilters);
-  }, [graph, selectedFlow, edgeFilters]);
+    return buildFlowModel(graph, selectedFlow, edgeFilters, diagramLayout);
+  }, [graph, selectedFlow, edgeFilters, diagramLayout]);
 
   async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -111,6 +114,7 @@ function App() {
 
             {selectedOption?.kind === 'group' ? <GroupSummary option={selectedOption} /> : null}
             {selectedEntryPoint ? <EntryPointSummary entryPoint={selectedEntryPoint} /> : null}
+            <DiagramLayoutControls layout={diagramLayout} onChange={setDiagramLayout} />
             <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
             <Inspector selection={selection} />
           </aside>
@@ -189,6 +193,22 @@ function EntryPointSummary({ entryPoint }: { entryPoint: EntryPoint }) {
       ) : null}
       <p>{entryPoint.evidence.location.path}:{entryPoint.evidence.location.line}</p>
       <p>{entryPoint.evidence.reason.label}</p>
+    </section>
+  );
+}
+
+function DiagramLayoutControls({ layout, onChange }: { layout: DiagramLayout; onChange: (layout: DiagramLayout) => void }) {
+  return (
+    <section className="summaryBlock">
+      <h3>Diagram layout</h3>
+      <label className="selectLabel" htmlFor="diagramLayout">Handling</label>
+      <select id="diagramLayout" value={layout} onChange={(event) => onChange(event.target.value as DiagramLayout)}>
+        <option value="layered">Layered flow</option>
+        <option value="hierarchy">Hierarchy by module/class</option>
+        <option value="circular">Circular relationships</option>
+        <option value="grid">Compact grid</option>
+      </select>
+      <p className="hint">Switch layouts to inspect dense flows from different angles.</p>
     </section>
   );
 }
@@ -368,7 +388,7 @@ function sortedUnique(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
-function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters: EdgeFilters) {
+function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters: EdgeFilters, layout: DiagramLayout) {
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const edgeById = new Map(graph.edges.map((edge) => [edge.id, edge]));
   const markerById = new Map(graph.markers.map((marker) => [marker.id, marker]));
@@ -410,7 +430,7 @@ function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters:
     markersByNodeId.set(marker.node_id, [...(markersByNodeId.get(marker.node_id) ?? []), marker]);
   }
 
-  const positions = hierarchyPositions(flowNodes, nodeById);
+  const positions = diagramPositions(flowNodes, flowEdges, nodeById, layout);
   const reactFlowNodes = flowNodes.map((node): FlowNode => ({
     id: node.id,
     position: positions.get(node.id) ?? { x: 0, y: 0 },
@@ -453,6 +473,110 @@ function hierarchySortKey(node: GraphNode): string {
   const path = node.path ?? '~external';
   const kindOrder = node.kind === 'module' ? '0' : node.kind === 'class' ? '1' : node.kind === 'function' || node.kind === 'method' ? '2' : '3';
   return `${path}:${kindOrder}:${node.parent_id ?? ''}:${node.qualified_name ?? node.label}:${node.id}`;
+}
+
+function diagramPositions(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  nodeById: Map<string, GraphNode>,
+  layout: DiagramLayout,
+): Map<string, { x: number; y: number }> {
+  if (layout === 'hierarchy') return hierarchyPositions(nodes, nodeById);
+  if (layout === 'circular') return circularPositions(nodes);
+  if (layout === 'grid') return gridPositions(nodes);
+  return layeredPositions(nodes, edges, nodeById);
+}
+
+function layeredPositions(nodes: GraphNode[], edges: GraphEdge[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const incoming = new Map<string, number>();
+  const outgoing = new Map<string, string[]>();
+
+  for (const node of nodes) {
+    incoming.set(node.id, 0);
+    outgoing.set(node.id, []);
+  }
+
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue;
+    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target]);
+    incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
+  }
+
+  const roots = nodes.filter((node) => (incoming.get(node.id) ?? 0) === 0 && node.kind !== 'module' && node.kind !== 'class');
+  const queue = (roots.length ? roots : nodes.filter((node) => node.kind !== 'module' && node.kind !== 'class')).map((node) => node.id);
+  const depth = new Map<string, number>();
+  for (const id of queue) depth.set(id, 0);
+
+  while (queue.length) {
+    const id = queue.shift()!;
+    const nextDepth = (depth.get(id) ?? 0) + 1;
+    for (const target of outgoing.get(id) ?? []) {
+      if ((depth.get(target) ?? -1) >= nextDepth) continue;
+      depth.set(target, nextDepth);
+      queue.push(target);
+    }
+  }
+
+  for (const node of nodes) {
+    if (node.kind === 'module') {
+      positions.set(node.id, { x: 0, y: 0 });
+    } else if (node.kind === 'class') {
+      positions.set(node.id, { x: 260, y: 0 });
+    }
+  }
+
+  const positionedNodes = nodes.filter((node) => node.kind !== 'module' && node.kind !== 'class');
+  const groups = groupBy(positionedNodes, (node) => String(depth.get(node.id) ?? fallbackDepth(node, nodeById)));
+  for (const [depthKey, group] of [...groups.entries()].sort(([a], [b]) => Number(a) - Number(b))) {
+    const x = 520 * Number(depthKey);
+    group.sort(compareHierarchyNodes).forEach((node, index) => positions.set(node.id, { x, y: index * 130 }));
+  }
+
+  const moduleGroups = groupBy(nodes.filter((node) => node.kind === 'module' || node.kind === 'class'), (node) => String(fallbackDepth(node, nodeById)));
+  for (const [depthKey, group] of [...moduleGroups.entries()].sort(([a], [b]) => Number(a) - Number(b))) {
+    group.sort(compareHierarchyNodes).forEach((node, index) => {
+      const existing = positions.get(node.id);
+      positions.set(node.id, { x: existing?.x ?? Number(depthKey) * 260, y: index * 80 - 180 });
+    });
+  }
+
+  return positions;
+}
+
+function fallbackDepth(node: GraphNode, nodeById: Map<string, GraphNode>): number {
+  let depth = node.kind === 'external' ? 3 : 1;
+  let current = node;
+  while (current.parent_id) {
+    depth += 1;
+    const parent = nodeById.get(current.parent_id);
+    if (!parent) break;
+    current = parent;
+  }
+  return depth;
+}
+
+function circularPositions(nodes: GraphNode[]): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const sorted = [...nodes].sort(compareHierarchyNodes);
+  const radius = Math.max(260, sorted.length * 22);
+  const center = { x: radius + 160, y: radius + 160 };
+  sorted.forEach((node, index) => {
+    const angle = (2 * Math.PI * index) / Math.max(sorted.length, 1) - Math.PI / 2;
+    positions.set(node.id, { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) });
+  });
+  return positions;
+}
+
+function gridPositions(nodes: GraphNode[]): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const sorted = [...nodes].sort(compareHierarchyNodes);
+  const columns = Math.max(2, Math.ceil(Math.sqrt(sorted.length)));
+  sorted.forEach((node, index) => {
+    positions.set(node.id, { x: (index % columns) * 260, y: Math.floor(index / columns) * 130 });
+  });
+  return positions;
 }
 
 function hierarchyPositions(nodes: GraphNode[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {

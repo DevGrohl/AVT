@@ -122,6 +122,7 @@ Current UI includes:
 - graph metadata summary;
 - Entry Point selector;
 - selected Execution Flow rendering with React Flow;
+- diagram layout options: layered flow, hierarchy, circular, and compact grid;
 - hierarchy context nodes;
 - node/edge inspector;
 - Flow Marker details;
