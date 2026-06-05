@@ -178,6 +178,7 @@ Supported Phase 1 Entry Point candidates:
   - `@app.route(...)`
   - `@app.get(...)`
   - `@router.post(...)`
+  - Django REST Framework `@api_view(...)` and ViewSet `@action(...)`;
   - other common HTTP decorator names;
 - CLI command decorators using Click/Typer-like patterns:
   - `@click.command()`
@@ -244,7 +245,8 @@ The analyzer emits External Interaction nodes/edges for meaningful calls outside
   - `.get()`, `.post()`, etc. when passed a literal `http://` or `https://` URL;
 - database-ish calls:
   - `sqlite3.*`, `psycopg2.*`, `pymysql.*`, `mysql.connector.*`, `sqlalchemy.*`;
-  - methods such as `.execute()`, `.query()`, `.commit()`, `.rollback()`, `.connect()`.
+  - methods such as `.execute()`, `.query()`, `.commit()`, `.rollback()`, `.connect()`;
+  - likely ORM methods such as `.save()`, `.filter()`, `.select_related()`, and `.prefetch_related()`.
 
 ## Flow Markers
 

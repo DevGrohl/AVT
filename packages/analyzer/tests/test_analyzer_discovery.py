@@ -64,6 +64,34 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertIn(("script", "scripts/tool.py", "main"), entries)
         self.assertIn(("manual", "app.py", "list_items"), entries)
 
+    def test_discovers_django_rest_framework_entry_point_decorators(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "views.py").write_text(
+                textwrap.dedent(
+                    """
+                    from rest_framework.decorators import action, api_view
+
+                    @api_view(["POST"])
+                    def login_view(request):
+                        return None
+
+                    class PageViewSet:
+                        @action(detail=True, methods=["post"])
+                        def publish(self, request, slug=None):
+                            return None
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+
+            scan = scan_python_project(root)
+            discovery = discover_entry_points(scan)
+
+        entries = {(entry.kind, entry.function.relative_path, entry.function.qualified_name) for entry in discovery.entry_points}
+        self.assertIn(("web_route", "views.py", "login_view"), entries)
+        self.assertIn(("web_route", "views.py", "PageViewSet.publish"), entries)
+
     def test_cli_input_and_output_folder_mode_writes_parsing_results(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp) / "repo"
@@ -591,6 +619,8 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
                         os.system('echo ok')
                         rq.get('https://example.com')
                         sqlite3.connect('db.sqlite')
+                        page.save()
+                        Page.objects.filter(published=True)
                     """
                 ).lstrip(),
                 encoding="utf-8",
@@ -613,7 +643,7 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertGreaterEqual(labels, {"filesystem", "subprocess", "network", "database"})
         self.assertGreaterEqual(
             reason_codes,
-            {"filesystem_call", "filesystem_method_call", "subprocess_call", "network_call", "database_call"},
+            {"filesystem_call", "filesystem_method_call", "subprocess_call", "network_call", "database_call", "orm_method_call"},
         )
         self.assertEqual(set(graph["flows"][0]["edge_ids"]), {edge["id"] for edge in external_edges})
         self.assertTrue(set(graph["flows"][0]["node_ids"]).issuperset({node["id"] for node in external_nodes}))

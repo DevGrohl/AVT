@@ -196,7 +196,20 @@ def _decorator_entry_reason(decorator: ast.expr) -> tuple[EntryPointKind, str, s
 
     parts = dotted.split(".")
     last = parts[-1]
-    if last in {"route", "get", "post", "put", "delete", "patch", "options", "head", "api_route", "websocket"}:
+    if last in {
+        "route",
+        "get",
+        "post",
+        "put",
+        "delete",
+        "patch",
+        "options",
+        "head",
+        "api_route",
+        "websocket",
+        "api_view",
+        "action",
+    }:
         return "web_route", "web_route_decorator", f"Web route decorator @{dotted}"
     if last in {"command", "group", "callback"}:
         return "cli_command", "cli_decorator", f"CLI command decorator @{dotted}"

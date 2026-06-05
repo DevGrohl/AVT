@@ -391,6 +391,17 @@ def _external_interaction(call_name: str, call: ast.Call) -> tuple[str, str, str
         return "database", "database_call", f"Database interaction via {call_name}()"
     if attr in {"execute", "executemany", "query", "commit", "rollback", "connect"}:
         return "database", "database_method_call", f"Database interaction via .{attr}()"
+    if attr in {
+        "save",
+        "delete",
+        "filter",
+        "exclude",
+        "create",
+        "update",
+        "select_related",
+        "prefetch_related",
+    }:
+        return "database", "orm_method_call", f"Likely ORM/database interaction via .{attr}()"
 
     return None
 
