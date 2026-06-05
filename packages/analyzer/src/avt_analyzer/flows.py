@@ -79,6 +79,7 @@ class _AnalysisContext:
         self.classes_by_name = _classes_by_name(discovery.classes)
         self.classes_by_module_qualified_name = _classes_by_module_qualified_name(discovery.modules, discovery.classes)
         self.import_aliases_by_path = _import_aliases_by_path(discovery)
+        self.argparse_dispatch_targets = _argparse_dispatch_targets(self)
 
 
 def _walk_entry(
@@ -227,6 +228,16 @@ def _resolve_call(
             return [(target, "confirmed", "self_method_call", f"Resolved self.{method_name}() in current class")]
 
     receiver, separator, method_name = call_name.partition(".")
+    if separator and method_name == "func":
+        dispatch_targets = context.argparse_dispatch_targets.get("func", ())
+        if len(dispatch_targets) == 1:
+            return [(dispatch_targets[0], "confirmed", "argparse_dispatch_call", f"Resolved argparse dispatch {call_name}()")]
+        if len(dispatch_targets) > 1:
+            return [
+                (target, "uncertain", "ambiguous_argparse_dispatch", f"Ambiguous argparse dispatch {call_name}() could target this handler")
+                for target in dispatch_targets[:5]
+            ]
+
     if separator and receiver in variable_types:
         method_targets = _resolve_method_targets(context, function, variable_types[receiver], method_name)
         if len(method_targets) == 1:
@@ -472,7 +483,11 @@ def _functions_by_name(functions: tuple[FunctionInfo, ...]) -> dict[str, tuple[F
 
 def _functions_by_module_qualified_name(modules: tuple[ModuleInfo, ...], functions: tuple[FunctionInfo, ...]) -> dict[str, FunctionInfo]:
     module_by_path = {module.relative_path: module for module in modules}
-    return {f"{module_by_path[fn.relative_path].qualified_name}.{fn.qualified_name}": fn for fn in functions}
+    indexed: dict[str, FunctionInfo] = {}
+    for fn in functions:
+        for module_name in _module_name_aliases(module_by_path[fn.relative_path]):
+            indexed[f"{module_name}.{fn.qualified_name}"] = fn
+    return indexed
 
 
 def _classes_by_name(classes: tuple[ClassInfo, ...]) -> dict[str, tuple[ClassInfo, ...]]:
@@ -484,7 +499,76 @@ def _classes_by_name(classes: tuple[ClassInfo, ...]) -> dict[str, tuple[ClassInf
 
 def _classes_by_module_qualified_name(modules: tuple[ModuleInfo, ...], classes: tuple[ClassInfo, ...]) -> dict[str, ClassInfo]:
     module_by_path = {module.relative_path: module for module in modules}
-    return {f"{module_by_path[cls.relative_path].qualified_name}.{cls.qualified_name}": cls for cls in classes}
+    indexed: dict[str, ClassInfo] = {}
+    for cls in classes:
+        for module_name in _module_name_aliases(module_by_path[cls.relative_path]):
+            indexed[f"{module_name}.{cls.qualified_name}"] = cls
+    return indexed
+
+
+def _module_name_aliases(module: ModuleInfo) -> tuple[str, ...]:
+    """Return importable module-name aliases for common source-root layouts."""
+
+    aliases = {module.qualified_name}
+    parts = module.relative_path.split("/")
+    if "src" in parts:
+        src_index = len(parts) - 1 - list(reversed(parts)).index("src")
+        suffix_parts = parts[src_index + 1 :]
+        suffix_name = _module_name_from_parts(suffix_parts)
+        if suffix_name:
+            aliases.add(suffix_name)
+    return tuple(sorted(aliases))
+
+
+def _module_name_from_parts(parts: list[str]) -> str | None:
+    if not parts:
+        return None
+    if parts[-1] == "__init__.py":
+        module_parts = parts[:-1]
+    elif parts[-1].endswith(".py"):
+        module_parts = [*parts[:-1], parts[-1][:-3]]
+    else:
+        module_parts = parts
+    return ".".join(part for part in module_parts if part) or None
+
+
+def _argparse_dispatch_targets(context: _AnalysisContext) -> dict[str, tuple[FunctionInfo, ...]]:
+    grouped: dict[str, list[FunctionInfo]] = {}
+    for module in context.discovery.modules:
+        for node in ast.walk(module.tree):
+            if not isinstance(node, ast.Call):
+                continue
+            call_name = _dotted_name(node.func)
+            if call_name is None or not call_name.endswith(".set_defaults"):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg is None:
+                    continue
+                handler_name = _dotted_name(keyword.value)
+                if handler_name is None:
+                    continue
+                handler = _resolve_function_reference(context, module.relative_path, handler_name)
+                if handler is not None:
+                    grouped.setdefault(keyword.arg, []).append(handler)
+    return {
+        attr: tuple(sorted({handler.node_id: handler for handler in handlers}.values(), key=lambda fn: (fn.relative_path, fn.qualified_name)))
+        for attr, handlers in grouped.items()
+    }
+
+
+def _resolve_function_reference(context: _AnalysisContext, relative_path: str, name: str) -> FunctionInfo | None:
+    same_file = context.functions_by_path.get(relative_path, ())
+    local = _find_qualified(same_file, name)
+    if local is not None:
+        return local
+    aliases = context.import_aliases_by_path.get(relative_path, {})
+    imported = aliases.get(name)
+    if imported is not None:
+        return context.functions_by_module_qualified_name.get(imported)
+    first, separator, rest = name.partition(".")
+    if separator and first in aliases:
+        return context.functions_by_module_qualified_name.get(f"{aliases[first]}.{rest}")
+    return context.functions_by_module_qualified_name.get(name)
 
 
 def _import_aliases_by_path(discovery: DiscoveryResult) -> dict[str, dict[str, str]]:

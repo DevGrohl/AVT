@@ -38,7 +38,20 @@ uv run --project packages/analyzer python -m unittest discover packages/analyzer
 
 ## Results
 
+### Viewer QA
+
+See `docs/validation/viewer-real-graph-qa.md`.
+
+Headless browser QA loaded the real AVT graph into the production viewer build, captured DOM and screenshot artifacts, and confirmed the page renders the AVT project, selected CLI Entry Point, and `analyze_command` flow content.
+
+Artifacts:
+
+- `docs/validation/artifacts/viewer-real-graph-dom.html`
+- `docs/validation/artifacts/viewer-real-graph.png`
+
 ### Default discovery graph
+
+Initial validation before argparse dispatch resolution:
 
 - Files scanned: 9
 - Entry Points found: 1
@@ -49,17 +62,34 @@ uv run --project packages/analyzer python -m unittest discover packages/analyzer
 - External Interaction edges: 0
 - Markers: 2
 
+After T-13 argparse dispatch resolution:
+
+- Files scanned: 9
+- Entry Points found: 1
+- Flows analyzed: 1
+- Warnings: 0
+- Nodes: 134
+- Edges: 53
+- External Interaction edges: 7
+- Markers: 130
+
 Discovered Entry Point:
 
 - `cli_command: packages/analyzer/src/avt_analyzer/cli.py:main`
 
-Spot-checked confirmed edge:
+Spot-checked confirmed edges:
 
 - `main -> build_parser`, reason `same_module_call`
+- `main -> analyze_command`, reason `argparse_dispatch_call`
+- `analyze_command -> scan_python_project`, reason `imported_function_call`
+- `analyze_command -> discover_entry_points`, reason `imported_function_call`
+- `analyze_command -> build_discovery_graph`, reason `imported_function_call`
 
-Assessment: correct but shallow. The default CLI Entry Point dispatches through `argparse` and static analysis does not yet connect `args.func(args)` to `analyze_command`.
+Assessment: default discovery now produces a useful Execution Flow for the AVT analyzer CLI. Static argparse dispatch connects `args.func(args)` to `analyze_command` through `set_defaults(func=analyze_command)`.
 
 ### Manual `analyze_command` graph
+
+Initial validation before source-root import resolution:
 
 - Files scanned: 9
 - Entry Points found: 2
@@ -70,15 +100,31 @@ Assessment: correct but shallow. The default CLI Entry Point dispatches through 
 - External Interaction edges: 4
 - Markers: 14
 
+After T-12 source-root import resolution:
+
+- Files scanned: 9
+- Entry Points found: 2
+- Flows analyzed: 2
+- Warnings: 0
+- Nodes: 134
+- Edges: 72
+- External Interaction edges: 9
+- Markers: 203
+
 Spot-checked edges:
 
 - `main -> build_parser`, reason `same_module_call`
+- `analyze_command -> scan_python_project`, reason `imported_function_call`
+- `analyze_command -> discover_entry_points`, reason `imported_function_call`
+- `analyze_command -> build_discovery_graph`, reason `imported_function_call`
+- `analyze_command -> scan_safety`, reason `imported_function_call`
+- `analyze_command -> apply_overlay`, reason `imported_function_call`
+- `analyze_command -> load_overlay`, reason `imported_function_call`
 - `analyze_command -> project_path.exists`, reason `filesystem_method_call`
-- `analyze_command -> candidate.exists`, reason `filesystem_method_call`
 - `analyze_command -> args.out.parent.mkdir`, reason `filesystem_method_call`
 - `analyze_command -> args.out.write_text`, reason `filesystem_method_call`
 
-Assessment: the manual Entry Point produces a useful first-pass Execution Flow for the analyzer command. A Developer can see that `analyze_command` validates paths, checks overlay existence, writes graph JSON, and emits filesystem interactions.
+Assessment: the manual Entry Point now produces a useful first-pass Execution Flow across analyzer modules. A Developer can see that `analyze_command` scans files, discovers Entry Points, builds a graph, scans safety warnings, applies overlays, writes graph JSON, and emits filesystem interactions.
 
 ## Fix made during validation
 
@@ -86,23 +132,14 @@ Validation initially surfaced a false-positive External Interaction: `pathlib.Pa
 
 ## Gaps found
 
-1. **Argparse dynamic dispatch is not resolved.**
-   - `main()` calls `args.func(args)`, which is configured by `set_defaults(func=analyze_command)`.
-   - The analyzer does not yet connect this pattern.
-
-2. **Import resolution does not understand source roots/package aliases.**
-   - Imports such as `from avt_analyzer.scanner import scan_python_project` do not currently resolve to repo-relative modules under `packages/analyzer/src/avt_analyzer/` when analyzing from the monorepo root.
-   - This limits traversal from `analyze_command` into scanner/discovery/graph modules.
-
-3. **Viewer validation is build-level, not browser-inspected.**
-   - `npm run build` passes.
-   - The generated graph can be loaded through the viewer file picker, but this validation did not include a browser screenshot or manual visual QA record.
+1. **Interactive viewer QA is still limited.**
+   - Headless browser-load QA passes and screenshot/DOM artifacts exist.
+   - The file picker, filter toggles, and click inspector should still receive interactive QA in a normal browser before user-facing release.
 
 ## Follow-ups
 
-- Add a task for Python package/source-root import resolution.
-- Add a task for argparse `set_defaults(func=...)` dispatch resolution.
-- Add browser/manual QA notes after loading `/tmp/avt-self-analyze-command-graph.json` in the viewer.
+- Add automated browser tests once viewer behavior stabilizes.
+- Exercise file picker, filters, and inspector manually in a normal browser before release.
 
 ## Verdict
 
@@ -113,4 +150,4 @@ Phase 1 has reached an initial end-to-end milestone:
 - External Interactions are visible for a manual Entry Point;
 - viewer builds and can load local graph JSON.
 
-The Execution Flow is useful for manual Entry Points, but default discovery needs better framework/dynamic dispatch handling before the analyzer is reliably useful on the AVT repo without manual selection.
+The Execution Flow is useful for the default discovered CLI Entry Point and crosses common `src/` package boundaries. The viewer production build can load and render the real graph in headless Chromium. The first Phase 1 milestone is validated at an initial end-to-end level; remaining viewer QA is interactive polish and automation.

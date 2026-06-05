@@ -168,6 +168,99 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertEqual(reason_codes, {"imported_module_call", "imported_function_call"})
         self.assertTrue(all(edge["certainty"] == "confirmed" for edge in graph["edges"]))
 
+    def test_cli_resolves_argparse_set_defaults_dispatch(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "cli.py").write_text(
+                textwrap.dedent(
+                    """
+                    import argparse
+
+                    def build_parser():
+                        parser = argparse.ArgumentParser()
+                        parser.set_defaults(func=run)
+                        return parser
+
+                    def run(args):
+                        helper()
+
+                    def helper():
+                        pass
+
+                    def main(argv=None):
+                        parser = build_parser()
+                        args = parser.parse_args(argv)
+                        return args.func(args)
+
+                    if __name__ == "__main__":
+                        main()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        reason_codes = {edge["evidence"]["reason"]["code"] for edge in graph["edges"]}
+        self.assertGreaterEqual(reason_codes, {"same_module_call", "argparse_dispatch_call"})
+        self.assertTrue(any(edge["target"].endswith("cli.py:run") for edge in graph["edges"]))
+        self.assertTrue(any(edge["target"].endswith("cli.py:helper") for edge in graph["edges"]))
+
+    def test_cli_resolves_package_imports_from_src_layouts(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            package = root / "packages" / "tool" / "src" / "my_tool"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            (package / "helpers.py").write_text(
+                textwrap.dedent(
+                    """
+                    class Worker:
+                        def run(self):
+                            finish()
+
+                    def finish():
+                        pass
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    from my_tool.helpers import Worker, finish
+
+                    @app.get('/')
+                    def home():
+                        worker: Worker
+                        worker.run()
+                        finish()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        reason_codes = {edge["evidence"]["reason"]["code"] for edge in graph["edges"]}
+        self.assertGreaterEqual(reason_codes, {"type_hint_method_call", "imported_function_call", "same_module_call"})
+        self.assertTrue(any(edge["target"].endswith("packages/tool/src/my_tool/helpers.py:Worker.run") for edge in graph["edges"]))
+        self.assertTrue(any(edge["target"].endswith("packages/tool/src/my_tool/helpers.py:finish") for edge in graph["edges"]))
+
     def test_cli_resolves_self_instantiated_and_type_hint_method_calls(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

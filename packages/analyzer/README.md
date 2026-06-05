@@ -1,33 +1,272 @@
 # AVT Analyzer
 
-Python package and CLI for generating AVT Execution Flow Graphs.
+Python package and CLI for generating AVT **Execution Flow Graph** JSON from local Python project directories.
 
-Current command shape:
+The analyzer is CLI/library-first. A backend API can wrap it later without shelling out.
+
+## Install / run in this monorepo
+
+From the AVT repository root:
 
 ```sh
-avt analyze <path> --out graph.json
-avt analyze <path> --list-entrypoints
-avt analyze <path> --entry path.py:qualified.name
+uv run --project packages/analyzer avt --help
+uv run --project packages/analyzer avt analyze --help
 ```
 
-Implemented Phase 1 foundations:
+Generate a graph:
 
-- deterministic Python file scanning;
-- default exclusions for tests, migrations, caches, build output, virtualenvs, and vendor directories;
-- `--include-tests` opt-in for test files;
-- parse/decode/read warnings in graph output;
-- Entry Point discovery for common web route decorators, Click/Typer-style command decorators, `if __name__ == "__main__"`, shebangs, `__main__.py`, and `scripts/`, `bin/`, or `tools/` files;
-- manual Entry Point selection with `--entry`;
-- local call traversal from Entry Points up to `--max-depth`;
-- confirmed `call` and `await` edges for same-module and imported local functions;
-- basic `uncertain` edges when an unqualified call name ambiguously matches multiple local functions;
-- reachable Flow Markers for async functions, conditionals, loops, raises, and returns;
-- External Interaction nodes and edges for filesystem, subprocess/shell, HTTP/network, and database-ish calls;
-- method call resolution for `self.method()`, directly instantiated locals, and type-hint-based locals;
-- uncertain method edges when a type name ambiguously matches multiple local classes;
-- output-safety warnings for environment variable references and secret-looking literals, without emitting raw secret values.
+```sh
+uv run --project packages/analyzer avt analyze . --out /tmp/avt-graph.json
+```
 
-Analysis Overlay support:
+Generate reproducible graph JSON:
+
+```sh
+uv run --project packages/analyzer avt analyze . --no-timestamp --out /tmp/avt-graph.json
+```
+
+Validate JSON:
+
+```sh
+python -m json.tool /tmp/avt-graph.json >/dev/null
+```
+
+## CLI reference
+
+Command:
+
+```sh
+avt analyze <path> [options]
+```
+
+### Parameters and options
+
+| Option | Required | Value | Default | Description |
+| --- | --- | --- | --- | --- |
+| `<path>` | yes | directory | none | Local project directory to analyze. Must exist and be a directory. |
+| `--out` | no | path | `avt-graph.json` | Output graph JSON path. Parent directories are created automatically. |
+| `--entry` | no | `path.py:qualified.name` | none | Manual Entry Point. Can be repeated. Relative path is from analyzed project root. |
+| `--list-entrypoints` | no | flag | false | Print discovered Entry Points and counts without writing graph JSON. |
+| `--overlay` | no | path | `<project>/.avt/overlay.json` if present | Analysis Overlay path. Applies uncertain edge resolutions. |
+| `--no-timestamp` | no | flag | false | Omit `metadata.generated_at` for reproducible output. |
+| `--include-tests` | no | flag | false | Include tests in scanning. Tests are excluded by default. |
+| `--max-depth` | no | integer | `6` | Maximum confirmed-call traversal depth from each Entry Point. |
+
+## Usage examples
+
+### Analyze a project
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project --out graph.json
+```
+
+### List Entry Points
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project --list-entrypoints
+```
+
+Output format is tab-separated rows followed by counts:
+
+```text
+cli_command	path/to/file.py:main	Called from if __name__ == '__main__'
+Files scanned: 12
+Entry Points found: 1
+Warnings: 0
+```
+
+### Analyze one manual Entry Point
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project \
+  --entry src/app.py:main \
+  --out graph.json
+```
+
+Manual Entry Point format:
+
+```text
+relative/path.py:qualified.name
+```
+
+Examples:
+
+```text
+app.py:main
+src/server.py:create_app
+src/controllers/users.py:UserController.list_users
+```
+
+### Analyze multiple manual Entry Points
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project \
+  --entry app.py:main \
+  --entry cli.py:analyze_command \
+  --out graph.json
+```
+
+### Include tests
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project --include-tests
+```
+
+### Change traversal depth
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project --max-depth 10
+```
+
+### Reproducible output
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project \
+  --no-timestamp \
+  --out graph.json
+```
+
+With `--no-timestamp`, `metadata.generated_at` is omitted and deterministic ordering checks apply.
+
+## Entry Point discovery
+
+Supported Phase 1 Entry Point candidates:
+
+- web route decorators using common Flask/FastAPI-style patterns:
+  - `@app.route(...)`
+  - `@app.get(...)`
+  - `@router.post(...)`
+  - other common HTTP decorator names;
+- CLI command decorators using Click/Typer-like patterns:
+  - `@click.command()`
+  - `@app.command()`
+  - `@app.callback()`;
+- `if __name__ == "__main__"` calls;
+- executable script candidates:
+  - shebang Python files;
+  - `__main__.py`;
+  - files under `scripts/`, `bin/`, or `tools/`;
+- manual `--entry` values.
+
+If no `--entry` is provided, all discovered Entry Points are analyzed within depth limits.
+
+## Scanning defaults
+
+The scanner includes Python files and excludes these by default:
+
+- test directories/files unless `--include-tests` is passed:
+  - `tests/`, `test/`, `test_*.py`, `*_test.py`;
+- migrations;
+- common generated/cache/vendor directories:
+  - `.git`, `.hg`, `.venv`, `.tox`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `__pycache__`, `node_modules`, `dist`, `build`, `site-packages`, `vendor`.
+
+Files are scanned in deterministic relative-path order.
+
+## Call and flow analysis
+
+The analyzer currently detects:
+
+- same-module function calls;
+- imported local function calls;
+- package/source-root imports for common layouts:
+  - `src/package/...`
+  - `packages/*/src/package/...`;
+- `self.method()` calls in the current class;
+- directly instantiated local method calls:
+  - `svc = Service(); svc.run()`;
+- type-hint-based method calls:
+  - `svc: Service; svc.run()`;
+- simple argparse dispatch:
+  - `parser.set_defaults(func=handler)`;
+  - `args.func(args)`;
+- `await` edges;
+- ambiguous unqualified calls as Uncertain Edges;
+- ambiguous type-based method dispatch as Uncertain Edges.
+
+Traversal follows confirmed local calls up to `--max-depth`. Uncertain Edges are emitted but not traversed.
+
+## External Interactions
+
+The analyzer emits External Interaction nodes/edges for meaningful calls outside the local code path:
+
+- filesystem:
+  - `open(...)`;
+  - path-like methods such as `.exists()`, `.mkdir()`, `.read_text()`, `.write_text()`;
+  - `shutil.*`;
+- subprocess/shell:
+  - `subprocess.*`;
+  - `os.system(...)`, `os.popen(...)`;
+- HTTP/network:
+  - `requests.*`, `httpx.*`, `urllib.request.*`, `aiohttp.*`;
+  - `.get()`, `.post()`, etc. when passed a literal `http://` or `https://` URL;
+- database-ish calls:
+  - `sqlite3.*`, `psycopg2.*`, `pymysql.*`, `mysql.connector.*`, `sqlalchemy.*`;
+  - methods such as `.execute()`, `.query()`, `.commit()`, `.rollback()`, `.connect()`.
+
+## Flow Markers
+
+Reachable functions can receive Flow Markers for static behavior evidence:
+
+- `async` — async function;
+- `conditional` — `if`, conditional expression, or `match`;
+- `loop` — `for`, `async for`, or `while`;
+- `raise` — `raise` statement;
+- `return` — `return` statement.
+
+## Graph output
+
+Top-level JSON keys:
+
+```json
+{
+  "metadata": {},
+  "entry_points": [],
+  "flows": [],
+  "nodes": [],
+  "edges": [],
+  "markers": [],
+  "warnings": []
+}
+```
+
+Important conventions:
+
+- paths are relative to the analyzed project;
+- no source snippets or full source code are embedded;
+- output ordering is deterministic;
+- `--no-timestamp` omits generated timestamps;
+- node IDs and edge IDs are stable for the same source and options;
+- graph contract fixtures live under `packages/analyzer/tests/fixtures/`.
+
+## Warnings
+
+Warnings may be emitted for:
+
+- read/decode/parse errors;
+- invalid manual Entry Point values;
+- missing manual Entry Point targets;
+- invalid overlay files or overlay references;
+- output-safety findings.
+
+Warnings include safe messages and locations when available.
+
+## Analysis Overlay
+
+Overlay files let Developers confirm or reject Uncertain Edges without changing source code.
+
+Default location:
+
+```text
+<project>/.avt/overlay.json
+```
+
+Explicit location:
+
+```sh
+uv run --project packages/analyzer avt analyze /path/to/project --overlay /path/to/overlay.json
+```
+
+Overlay shape:
 
 ```json
 {
@@ -38,10 +277,63 @@ Analysis Overlay support:
 }
 ```
 
-Use `--overlay path` or place the file at `<project>/.avt/overlay.json`. Overlay resolutions apply only to uncertain edges.
+Rules:
 
-Graph hardening includes a sample graph fixture, graph contract tests, deterministic ID ordering checks, and `--no-timestamp` reproducibility coverage.
+- only `confirmed` and `rejected` are accepted overlay certainties;
+- overlay resolutions apply only to existing uncertain edges;
+- invalid overlay entries become warnings;
+- rejected edges remain in graph output with `certainty: "rejected"` so the viewer can filter them.
 
-The analyzer currently builds hierarchy/function nodes and first-pass Execution Flows. Viewer/spike work comes next.
+## Safety behavior
 
-This package is intentionally CLI/library-first. A backend API can wrap it later.
+AVT is not a security scanner. Safety scanning protects graph output:
+
+- secret-looking literal values are redacted from warnings;
+- environment variable names may be emitted, values are not;
+- docstrings are skipped;
+- warnings include source locations, not raw secret values;
+- graph JSON does not embed source snippets.
+
+Warning examples:
+
+```text
+secret_literal_redacted
+Environment variable referenced: DATABASE_URL
+```
+
+## Limitations
+
+Current Phase 1 limitations:
+
+- static AST analysis only;
+- no full Python import/runtime semantics;
+- no full control-flow graph;
+- dynamic dispatch is limited to implemented patterns;
+- third-party calls are not traversed;
+- inherited/override relationships are not fully modeled yet;
+- External Interaction detection is heuristic;
+- Analysis Overlay editing is not available in the CLI.
+
+## Development verification
+
+Run analyzer tests:
+
+```sh
+uv run --project packages/analyzer python -m unittest discover packages/analyzer/tests
+```
+
+Run the analyzer on this repo:
+
+```sh
+uv run --project packages/analyzer avt analyze . --no-timestamp --out /tmp/avt-self-graph.json
+python -m json.tool /tmp/avt-self-graph.json >/dev/null
+```
+
+Run a real manual Entry Point validation:
+
+```sh
+uv run --project packages/analyzer avt analyze . \
+  --entry packages/analyzer/src/avt_analyzer/cli.py:analyze_command \
+  --no-timestamp \
+  --out /tmp/avt-self-analyze-command-graph.json
+```
