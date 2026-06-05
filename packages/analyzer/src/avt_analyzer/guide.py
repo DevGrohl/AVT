@@ -95,12 +95,34 @@ def build_static_guide_output(*, project_name: str, discovery: DiscoveryResult) 
 
 
 def write_guide_file(path: Path, *, project_name: str, discovery: DiscoveryResult) -> None:
+    safe_summary = build_safe_project_summary(project_name=project_name, discovery=discovery)
     payload = {
-        "safe_project_summary": build_safe_project_summary(project_name=project_name, discovery=discovery),
+        "safe_project_summary": safe_summary,
+        "llm_prompt": build_guide_prompt(safe_summary),
         **build_static_guide_output(project_name=project_name, discovery=discovery),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def build_guide_prompt(safe_summary: dict[str, object]) -> str:
+    """Build a source-free prompt for a future LLM Guide provider."""
+
+    return "\n".join(
+        [
+            "You are the AVT LLM Guide.",
+            "Your job is to recommend useful Entry Points for a Developer trying to understand this Python project.",
+            "Use only the safe metadata below. Do not invent files, functions, or source facts.",
+            "Return strict JSON with keys: suggested_entry_points and project_observations.",
+            "Each suggested_entry_points item must include: entry, kind, confidence, reason, risk.",
+            "entry must use format relative/path.py:qualified.name and must refer to a symbol in the metadata.",
+            "confidence must be one of: high, medium, low.",
+            "Prefer Entry Points that explain application lifecycle, user-facing behavior, authentication/session setup, and non-trivial business flows.",
+            "",
+            "SAFE PROJECT METADATA JSON:",
+            json.dumps(safe_summary, indent=2, sort_keys=True),
+        ]
+    )
 
 
 def load_guide_entries(path: Path, discovery: DiscoveryResult) -> GuideValidationResult:

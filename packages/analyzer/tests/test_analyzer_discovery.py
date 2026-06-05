@@ -283,6 +283,8 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
 
         self.assertIn("Guide suggestions written", result.stdout)
         self.assertIn("safe_project_summary", guide)
+        self.assertIn("llm_prompt", guide)
+        self.assertIn("SAFE PROJECT METADATA JSON", guide["llm_prompt"])
         self.assertEqual(guide["suggested_entry_points"][0]["entry"], "app.py:list_items")
         self.assertIn("functions", guide["safe_project_summary"])
 

@@ -96,6 +96,7 @@ Implemented first foundation slice:
 
 - `avt guide-entrypoints <path> --out guide.json`
 - source-free `safe_project_summary`
+- source-free `llm_prompt` with output contract instructions
 - deterministic baseline `suggested_entry_points`
 - `avt analyze --guide guide.json`
 - validation against scanned symbols
