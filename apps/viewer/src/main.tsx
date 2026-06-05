@@ -492,16 +492,22 @@ function buildFlowModel(
     markersByNodeId.set(marker.node_id, [...(markersByNodeId.get(marker.node_id) ?? []), marker]);
   }
 
-  const positions = diagramPositions(flowNodes, flowEdges, nodeById, layout);
-  const reactFlowNodes = flowNodes.map((node): FlowNode => ({
-    id: node.id,
-    position: positions.get(node.id) ?? { x: 0, y: 0 },
-    data: {
-      label: `${node.kind}: ${node.label}${markersByNodeId.has(node.id) ? ` • ${markersByNodeId.get(node.id)?.length} marker(s)` : ''}`,
-    },
-    type: 'default',
-    style: nodeStyle(node),
-  }));
+  const layoutModel = diagramLayoutModel(flowNodes, flowEdges, nodeById, layout, displayOptions.showHierarchyContext);
+  const reactFlowNodes = flowNodes.map((node): FlowNode => {
+    const parentId = layoutModel.parentIds.get(node.id);
+    return {
+      id: node.id,
+      position: layoutModel.positions.get(node.id) ?? { x: 0, y: 0 },
+      parentId,
+      extent: parentId ? 'parent' : undefined,
+      data: {
+        label: `${node.kind}: ${node.label}${markersByNodeId.has(node.id) ? ` • ${markersByNodeId.get(node.id)?.length} marker(s)` : ''}`,
+      },
+      type: 'default',
+      style: nodeStyle(node, layoutModel.sizes.get(node.id)),
+      zIndex: node.kind === 'module' ? 0 : node.kind === 'class' ? 1 : 2,
+    };
+  });
 
   const reactFlowEdges = flowEdges.map((edge): FlowEdge => ({
     id: edge.id,
@@ -537,16 +543,88 @@ function hierarchySortKey(node: GraphNode): string {
   return `${path}:${kindOrder}:${node.parent_id ?? ''}:${node.qualified_name ?? node.label}:${node.id}`;
 }
 
-function diagramPositions(
+interface DiagramLayoutModel {
+  positions: Map<string, { x: number; y: number }>;
+  parentIds: Map<string, string>;
+  sizes: Map<string, { width: number; height: number }>;
+}
+
+function diagramLayoutModel(
   nodes: GraphNode[],
   edges: GraphEdge[],
   nodeById: Map<string, GraphNode>,
   layout: DiagramLayout,
-): Map<string, { x: number; y: number }> {
-  if (layout === 'hierarchy') return hierarchyPositions(nodes, nodeById);
-  if (layout === 'circular') return circularPositions(nodes);
-  if (layout === 'grid') return gridPositions(nodes);
-  return layeredPositions(nodes, edges, nodeById);
+  showHierarchyContext: boolean,
+): DiagramLayoutModel {
+  if (layout === 'hierarchy' && showHierarchyContext) return hierarchyAreaLayout(nodes, nodeById);
+  if (layout === 'hierarchy') return emptyLayoutModel(hierarchyPositions(nodes, nodeById));
+  if (layout === 'circular') return emptyLayoutModel(circularPositions(nodes));
+  if (layout === 'grid') return emptyLayoutModel(gridPositions(nodes));
+  return emptyLayoutModel(layeredPositions(nodes, edges, nodeById));
+}
+
+function emptyLayoutModel(positions: Map<string, { x: number; y: number }>): DiagramLayoutModel {
+  return { positions, parentIds: new Map(), sizes: new Map() };
+}
+
+function hierarchyAreaLayout(nodes: GraphNode[], nodeById: Map<string, GraphNode>): DiagramLayoutModel {
+  const absolute = hierarchyPositions(nodes, nodeById);
+  const visibleIds = new Set(nodes.map((node) => node.id));
+  const parentIds = new Map<string, string>();
+  const sizes = new Map<string, { width: number; height: number }>();
+  const positions = new Map(absolute);
+
+  for (const node of nodes) {
+    if (!node.parent_id || !visibleIds.has(node.parent_id)) continue;
+    const parent = nodeById.get(node.parent_id);
+    if (parent?.kind === 'module' || parent?.kind === 'class') parentIds.set(node.id, parent.id);
+  }
+
+  for (const node of nodes) {
+    const parentId = parentIds.get(node.id);
+    if (!parentId) continue;
+    const parentPosition = absolute.get(parentId) ?? { x: 0, y: 0 };
+    const nodePosition = absolute.get(node.id) ?? { x: 0, y: 0 };
+    positions.set(node.id, {
+      x: Math.max(24, nodePosition.x - parentPosition.x + 32),
+      y: Math.max(52, nodePosition.y - parentPosition.y + 56),
+    });
+  }
+
+  const containers = nodes.filter((node) => node.kind === 'class' || node.kind === 'module').sort((a, b) => containerDepth(b, nodeById) - containerDepth(a, nodeById));
+  for (const container of containers) {
+    const children = nodes.filter((node) => parentIds.get(node.id) === container.id);
+    const minimum = container.kind === 'module' ? { width: 820, height: 180 } : { width: 560, height: 150 };
+    let width = minimum.width;
+    let height = minimum.height;
+    for (const child of children) {
+      const position = positions.get(child.id) ?? { x: 0, y: 0 };
+      const childSize = sizes.get(child.id) ?? defaultNodeSize(child);
+      width = Math.max(width, position.x + childSize.width + 40);
+      height = Math.max(height, position.y + childSize.height + 40);
+    }
+    sizes.set(container.id, { width, height });
+  }
+
+  return { positions, parentIds, sizes };
+}
+
+function defaultNodeSize(node: GraphNode): { width: number; height: number } {
+  if (node.kind === 'module') return { width: 820, height: 180 };
+  if (node.kind === 'class') return { width: 560, height: 150 };
+  return { width: 220, height: 72 };
+}
+
+function containerDepth(node: GraphNode, nodeById: Map<string, GraphNode>): number {
+  let depth = 0;
+  let current = node;
+  while (current.parent_id) {
+    depth += 1;
+    const parent = nodeById.get(current.parent_id);
+    if (!parent) break;
+    current = parent;
+  }
+  return depth;
 }
 
 function layeredPositions(nodes: GraphNode[], edges: GraphEdge[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {
@@ -704,8 +782,24 @@ function directModuleParent(node: GraphNode, moduleId: string, nodeById: Map<str
   return parent?.kind === 'module' && parent.id === moduleId;
 }
 
-function nodeStyle(node: GraphNode): React.CSSProperties {
-  const color = node.kind === 'external' ? '#fff3cd' : node.kind === 'module' || node.kind === 'class' ? '#e2e3e5' : '#d1e7dd';
+function nodeStyle(node: GraphNode, size?: { width: number; height: number }): React.CSSProperties {
+  if (node.kind === 'module' || node.kind === 'class') {
+    const background = node.kind === 'module' ? 'rgba(226, 232, 240, 0.42)' : 'rgba(219, 234, 254, 0.46)';
+    const border = node.kind === 'module' ? '1px solid #94a3b8' : '1px solid #93c5fd';
+    return {
+      background,
+      border,
+      borderRadius: 18,
+      color: '#172033',
+      fontWeight: 800,
+      minWidth: 220,
+      padding: 12,
+      textAlign: 'left',
+      width: size?.width,
+      height: size?.height,
+    };
+  }
+  const color = node.kind === 'external' ? '#fff3cd' : '#d1e7dd';
   return { background: color, border: '1px solid #9aa6bd', borderRadius: 12, color: '#172033', minWidth: 180 };
 }
 

@@ -112,7 +112,7 @@ Hierarchy context is shown by including ancestor module/class nodes for visible 
 Use **Diagram layout** to switch how the same selected flow is drawn:
 
 - **Layered flow** — default flow-oriented view. Places roots on the left and reachable calls/interactions in later columns.
-- **Hierarchy by module/class** — ownership-oriented view. Places modules, classes, functions/methods, and External Interactions in structural columns.
+- **Hierarchy by module/class** — ownership-oriented view. Renders modules and classes as container areas so owned functions/methods sit inside their structural context.
 - **Circular relationships** — relationship overview for spotting clusters/cycles in dense graphs.
 - **Compact grid** — dense scan-friendly layout when labels/lists matter more than edge geometry.
 
