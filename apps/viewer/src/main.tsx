@@ -556,19 +556,25 @@ function diagramLayoutModel(
   layout: DiagramLayout,
   showHierarchyContext: boolean,
 ): DiagramLayoutModel {
-  if (layout === 'hierarchy' && showHierarchyContext) return hierarchyAreaLayout(nodes, nodeById);
-  if (layout === 'hierarchy') return emptyLayoutModel(hierarchyPositions(nodes, nodeById));
+  if (layout === 'hierarchy') {
+    const positions = hierarchyPositions(nodes, nodeById);
+    return showHierarchyContext ? areaLayout(nodes, nodeById, positions) : emptyLayoutModel(positions);
+  }
   if (layout === 'circular') return emptyLayoutModel(circularPositions(nodes));
   if (layout === 'grid') return emptyLayoutModel(gridPositions(nodes));
-  return emptyLayoutModel(layeredPositions(nodes, edges, nodeById));
+  const positions = layeredPositions(nodes, edges, nodeById);
+  return showHierarchyContext ? areaLayout(nodes, nodeById, positions) : emptyLayoutModel(positions);
 }
 
 function emptyLayoutModel(positions: Map<string, { x: number; y: number }>): DiagramLayoutModel {
   return { positions, parentIds: new Map(), sizes: new Map() };
 }
 
-function hierarchyAreaLayout(nodes: GraphNode[], nodeById: Map<string, GraphNode>): DiagramLayoutModel {
-  const absolute = hierarchyPositions(nodes, nodeById);
+function areaLayout(
+  nodes: GraphNode[],
+  nodeById: Map<string, GraphNode>,
+  absolute: Map<string, { x: number; y: number }>,
+): DiagramLayoutModel {
   const visibleIds = new Set(nodes.map((node) => node.id));
   const parentIds = new Map<string, string>();
   const sizes = new Map<string, { width: number; height: number }>();
