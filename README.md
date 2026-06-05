@@ -123,6 +123,7 @@ Current UI includes:
 - Entry Point selector;
 - selected Execution Flow rendering with React Flow;
 - diagram layout options: layered flow, hierarchy, circular, and compact grid;
+- diagram handling options for hierarchy context, External Interactions, and edge labels;
 - hierarchy context nodes;
 - node/edge inspector;
 - Flow Marker details;

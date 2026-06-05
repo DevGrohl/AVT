@@ -13,10 +13,18 @@ type InspectorSelection =
 
 type DiagramLayout = 'hierarchy' | 'layered' | 'circular' | 'grid';
 
+type EdgeLabelMode = 'kind' | 'reason' | 'none';
+
 interface EdgeFilters {
   showConfirmed: boolean;
   showUncertain: boolean;
   showRejected: boolean;
+}
+
+interface DiagramDisplayOptions {
+  showHierarchyContext: boolean;
+  showExternalInteractions: boolean;
+  edgeLabelMode: EdgeLabelMode;
 }
 
 interface FlowSelectionOption {
@@ -33,6 +41,11 @@ function App() {
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [edgeFilters, setEdgeFilters] = useState<EdgeFilters>({ showConfirmed: true, showUncertain: true, showRejected: false });
   const [diagramLayout, setDiagramLayout] = useState<DiagramLayout>('layered');
+  const [displayOptions, setDisplayOptions] = useState<DiagramDisplayOptions>({
+    showHierarchyContext: true,
+    showExternalInteractions: true,
+    edgeLabelMode: 'kind',
+  });
 
   useEffect(() => {
     loadSampleGraph()
@@ -62,8 +75,8 @@ function App() {
 
   const flowModel = useMemo(() => {
     if (!graph || !selectedFlow) return emptyFlowModel();
-    return buildFlowModel(graph, selectedFlow, edgeFilters, diagramLayout);
-  }, [graph, selectedFlow, edgeFilters, diagramLayout]);
+    return buildFlowModel(graph, selectedFlow, edgeFilters, diagramLayout, displayOptions);
+  }, [graph, selectedFlow, edgeFilters, diagramLayout, displayOptions]);
 
   async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -115,6 +128,7 @@ function App() {
             {selectedOption?.kind === 'group' ? <GroupSummary option={selectedOption} /> : null}
             {selectedEntryPoint ? <EntryPointSummary entryPoint={selectedEntryPoint} /> : null}
             <DiagramLayoutControls layout={diagramLayout} onChange={setDiagramLayout} />
+            <DiagramDisplayControls options={displayOptions} onChange={setDisplayOptions} />
             <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
             <Inspector selection={selection} />
           </aside>
@@ -209,6 +223,28 @@ function DiagramLayoutControls({ layout, onChange }: { layout: DiagramLayout; on
         <option value="grid">Compact grid</option>
       </select>
       <p className="hint">Switch layouts to inspect dense flows from different angles.</p>
+    </section>
+  );
+}
+
+function DiagramDisplayControls({ options, onChange }: { options: DiagramDisplayOptions; onChange: (options: DiagramDisplayOptions) => void }) {
+  return (
+    <section className="summaryBlock">
+      <h3>Diagram handling</h3>
+      <label className="checkbox">
+        <input type="checkbox" checked={options.showHierarchyContext} onChange={(event) => onChange({ ...options, showHierarchyContext: event.target.checked })} />
+        Show module/class context
+      </label>
+      <label className="checkbox">
+        <input type="checkbox" checked={options.showExternalInteractions} onChange={(event) => onChange({ ...options, showExternalInteractions: event.target.checked })} />
+        Show External Interactions
+      </label>
+      <label className="selectLabel" htmlFor="edgeLabels">Edge labels</label>
+      <select id="edgeLabels" value={options.edgeLabelMode} onChange={(event) => onChange({ ...options, edgeLabelMode: event.target.value as EdgeLabelMode })}>
+        <option value="kind">Kind</option>
+        <option value="reason">Reason</option>
+        <option value="none">None</option>
+      </select>
     </section>
   );
 }
@@ -388,7 +424,13 @@ function sortedUnique(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
-function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters: EdgeFilters, layout: DiagramLayout) {
+function buildFlowModel(
+  graph: ExecutionFlowGraph,
+  flow: ExecutionFlow,
+  filters: EdgeFilters,
+  layout: DiagramLayout,
+  displayOptions: DiagramDisplayOptions,
+) {
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const edgeById = new Map(graph.edges.map((edge) => [edge.id, edge]));
   const markerById = new Map(graph.markers.map((marker) => [marker.id, marker]));
@@ -397,6 +439,7 @@ function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters:
     flow.edge_ids.filter((edgeId) => {
       const edge = edgeById.get(edgeId);
       if (!edge) return false;
+      if (!displayOptions.showExternalInteractions && edge.kind === 'external_interaction') return false;
       if (edge.certainty === 'confirmed') return filters.showConfirmed;
       if (edge.certainty === 'uncertain') return filters.showUncertain;
       return filters.showRejected;
@@ -412,11 +455,19 @@ function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters:
     }
   }
 
-  for (const nodeId of [...flowNodeIds]) {
-    let current = nodeById.get(nodeId);
-    while (current?.parent_id) {
-      flowNodeIds.add(current.parent_id);
-      current = nodeById.get(current.parent_id);
+  if (displayOptions.showHierarchyContext) {
+    for (const nodeId of [...flowNodeIds]) {
+      let current = nodeById.get(nodeId);
+      while (current?.parent_id) {
+        flowNodeIds.add(current.parent_id);
+        current = nodeById.get(current.parent_id);
+      }
+    }
+  }
+
+  if (!displayOptions.showExternalInteractions) {
+    for (const nodeId of [...flowNodeIds]) {
+      if (nodeById.get(nodeId)?.kind === 'external') flowNodeIds.delete(nodeId);
     }
   }
 
@@ -445,7 +496,7 @@ function buildFlowModel(graph: ExecutionFlowGraph, flow: ExecutionFlow, filters:
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    label: edge.kind,
+    label: edgeLabel(edge, displayOptions.edgeLabelMode),
     animated: edge.kind === 'await' || edge.kind === 'external_interaction',
     style: edgeStyle(edge),
   }));
@@ -645,6 +696,12 @@ function directModuleParent(node: GraphNode, moduleId: string, nodeById: Map<str
 function nodeStyle(node: GraphNode): React.CSSProperties {
   const color = node.kind === 'external' ? '#fff3cd' : node.kind === 'module' || node.kind === 'class' ? '#e2e3e5' : '#d1e7dd';
   return { background: color, border: '1px solid #9aa6bd', borderRadius: 12, color: '#172033', minWidth: 180 };
+}
+
+function edgeLabel(edge: GraphEdge, mode: EdgeLabelMode): string | undefined {
+  if (mode === 'none') return undefined;
+  if (mode === 'reason') return edge.evidence.reason.code.replaceAll('_', ' ');
+  return edge.kind;
 }
 
 function edgeStyle(edge: GraphEdge): React.CSSProperties {

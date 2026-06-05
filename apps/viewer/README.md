@@ -115,7 +115,13 @@ Use **Diagram layout** to switch how the same selected flow is drawn:
 - **Circular relationships** — relationship overview for spotting clusters/cycles in dense graphs.
 - **Compact grid** — dense scan-friendly layout when labels/lists matter more than edge geometry.
 
-These options are inspired by database diagram tools such as DataGrip: the graph data stays the same, but layout handling changes depending on what the Developer is trying to understand.
+Use **Diagram handling** to tune what the diagram shows:
+
+- show/hide module/class context nodes;
+- show/hide External Interactions;
+- switch edge labels between kind, reason, or none.
+
+These options are inspired by database diagram tools such as DataGrip: the graph data stays the same, but layout and handling change depending on what the Developer is trying to understand.
 
 ### Inspector
 
