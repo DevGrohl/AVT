@@ -185,6 +185,10 @@ Supported Phase 1 Entry Point candidates:
   - `@app.command()`
   - `@app.callback()`;
 - `if __name__ == "__main__"` calls;
+- FastAPI framework hooks:
+  - `FastAPI(lifespan=lifespan)`;
+  - `@app.middleware(...)`;
+  - `@app.exception_handler(...)`;
 - executable script candidates:
   - shebang Python files;
   - `__main__.py`;

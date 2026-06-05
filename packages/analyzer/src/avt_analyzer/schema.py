@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Literal, NotRequired, TypedDict
 
 Certainty = Literal["confirmed", "uncertain", "rejected"]
-EntryPointKind = Literal["web_route", "cli_command", "script", "manual"]
+EntryPointKind = Literal["web_route", "framework_hook", "cli_command", "script", "manual"]
 NodeKind = Literal["project", "module", "class", "function", "method", "external"]
 EdgeKind = Literal["call", "await", "external_interaction", "inheritance", "override"]
 FlowMarkerKind = Literal["conditional", "raise", "return", "async", "loop"]

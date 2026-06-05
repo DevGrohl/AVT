@@ -129,6 +129,11 @@ def discover_entry_points(scan: ScanResult, *, manual_entries: Iterable[str] = (
             if fn is not None:
                 _add_candidate(candidates, seen, "cli_command", fn, call, "cli_main_guard", "Called from if __name__ == '__main__'")
 
+        for call, lifespan_name in _fastapi_lifespan_bindings(python_file.tree):
+            fn = file_function_names.get(lifespan_name)
+            if fn is not None:
+                _add_candidate(candidates, seen, "framework_hook", fn, call, "fastapi_lifespan", "FastAPI lifespan hook")
+
         script_fn = _script_entry_function(python_file, file_function_names)
         if script_fn is not None:
             _add_candidate(
@@ -220,6 +225,8 @@ def _decorator_entry_reason(decorator: ast.expr) -> tuple[EntryPointKind, str, s
         route_path = _route_path(decorator)
         http_methods = _http_methods(last, decorator)
         return "web_route", "web_route_decorator", f"Web route decorator @{dotted}", route_path, http_methods
+    if last in {"middleware", "exception_handler"}:
+        return "framework_hook", "framework_hook_decorator", f"Framework hook decorator @{dotted}", None, ()
     if last in {"command", "group", "callback"}:
         return "cli_command", "cli_decorator", f"CLI command decorator @{dotted}", None, ()
     return None
@@ -242,6 +249,19 @@ def _is_main_guard(test: ast.expr) -> bool:
     return any(isinstance(expr, ast.Name) and expr.id == "__name__" for expr in expressions) and any(
         isinstance(expr, ast.Constant) and expr.value == "__main__" for expr in expressions
     )
+
+
+def _fastapi_lifespan_bindings(tree: ast.Module) -> list[tuple[ast.Call, str]]:
+    bindings: list[tuple[ast.Call, str]] = []
+    for stmt in ast.walk(tree):
+        if not isinstance(stmt, ast.Call) or _called_name(stmt) != "FastAPI":
+            continue
+        for keyword in stmt.keywords:
+            if keyword.arg == "lifespan":
+                target = _dotted_name(keyword.value)
+                if target is not None:
+                    bindings.append((stmt, target))
+    return sorted(bindings, key=lambda item: (item[0].lineno, item[0].col_offset, item[1]))
 
 
 def _script_entry_function(python_file: PythonFile, functions: dict[str, FunctionInfo]) -> FunctionInfo | None:

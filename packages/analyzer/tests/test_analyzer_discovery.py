@@ -101,6 +101,41 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertIn(("web_route", "views.py", "PageViewSet.publish"), entries)
         self.assertEqual(publish.http_methods, ("POST",))
 
+    def test_discovers_fastapi_framework_hooks(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    from contextlib import asynccontextmanager
+                    from fastapi import FastAPI, Request
+
+                    @asynccontextmanager
+                    async def lifespan(app: FastAPI):
+                        yield
+
+                    app = FastAPI(lifespan=lifespan)
+
+                    @app.exception_handler(ValueError)
+                    async def value_error_handler(request: Request, exc: ValueError):
+                        return None
+
+                    @app.middleware("http")
+                    async def log_requests(request: Request, call_next):
+                        return await call_next(request)
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+
+            scan = scan_python_project(root)
+            discovery = discover_entry_points(scan)
+
+        entries = {(entry.kind, entry.function.qualified_name, entry.evidence["reason"]["code"]) for entry in discovery.entry_points}
+        self.assertIn(("framework_hook", "lifespan", "fastapi_lifespan"), entries)
+        self.assertIn(("framework_hook", "value_error_handler", "framework_hook_decorator"), entries)
+        self.assertIn(("framework_hook", "log_requests", "framework_hook_decorator"), entries)
+
     def test_composes_fastapi_router_prefixes_into_route_paths(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

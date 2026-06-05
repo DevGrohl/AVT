@@ -118,7 +118,7 @@ def _assert_graph_contract(testcase: unittest.TestCase, graph: dict[str, Any]) -
         _assert_evidence_contract(testcase, marker["evidence"])
 
     for entry in graph["entry_points"]:
-        testcase.assertIn(entry["kind"], {"web_route", "cli_command", "script", "manual"})
+        testcase.assertIn(entry["kind"], {"web_route", "framework_hook", "cli_command", "script", "manual"})
         testcase.assertIn(entry["node_id"], node_ids)
         if "route_path" in entry:
             testcase.assertIsInstance(entry["route_path"], str)

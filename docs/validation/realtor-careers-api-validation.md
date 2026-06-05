@@ -21,11 +21,11 @@ python -m json.tool /tmp/avt-realtor.json >/dev/null
 ## Results
 
 - Files scanned: 62
-- Entry Points found: 52
-- Flows analyzed: 52
+- Entry Points found: 52 before framework hook discovery; 55 after framework hook discovery
+- Flows analyzed: 52 before framework hook discovery; 55 after framework hook discovery
 - Nodes: 281 before FastAPI dependency resolution; 282 after FastAPI dependency resolution
-- Edges: 258 before FastAPI dependency resolution; 267 after explicit FastAPI dependency resolution; 323 after dependency alias resolution
-- Markers: 417 before FastAPI dependency resolution; 432 after FastAPI dependency resolution
+- Edges: 258 before FastAPI dependency resolution; 267 after explicit FastAPI dependency resolution; 323 after dependency alias resolution; 326 after framework hook discovery
+- Markers: 417 before FastAPI dependency resolution; 432 after FastAPI dependency resolution; 442 after framework hook discovery
 - Warnings: 8
 
 Node kinds:
@@ -135,6 +135,16 @@ Observed dependency edges after the fix:
 This makes authentication/session setup visible in protected endpoint flows.
 
 AVT also resolves imported dependency aliases such as RealtorCareersAPI's `SessionDep = Annotated[AsyncSession, Depends(get_session)]`. This added 56 `fastapi_dependency_alias_call` edges, making database session setup visible across CRUD endpoint flows without requiring any target-project changes.
+
+## Framework hook discovery
+
+RealtorCareersAPI has important FastAPI behavior outside route functions:
+
+- `lifespan` initializes the database connection during app startup.
+- `validation_exception_handler` controls request validation error responses.
+- `log_requests` wraps all HTTP requests as middleware.
+
+AVT now discovers these as `framework_hook` Entry Points. RealtorCareersAPI gained 3 Entry Points/flows for these hooks, making request/application lifecycle behavior visible without changing the target project.
 
 ## Follow-up validation questions
 

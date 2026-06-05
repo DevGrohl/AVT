@@ -1,5 +1,5 @@
 export type Certainty = 'confirmed' | 'uncertain' | 'rejected';
-export type EntryPointKind = 'web_route' | 'cli_command' | 'script' | 'manual';
+export type EntryPointKind = 'web_route' | 'framework_hook' | 'cli_command' | 'script' | 'manual';
 export type NodeKind = 'project' | 'module' | 'class' | 'function' | 'method' | 'external';
 export type EdgeKind = 'call' | 'await' | 'external_interaction' | 'inheritance' | 'override';
 export type FlowMarkerKind = 'conditional' | 'raise' | 'return' | 'async' | 'loop';

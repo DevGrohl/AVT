@@ -22,6 +22,7 @@ AVT is restarting as an Understanding Aid for developers trying to understand un
 Phase 1 discovers and supports manual selection of:
 
 - Web routes using common decorator patterns, with explicit Flask/FastAPI support.
+- Framework hooks that shape request or application lifecycle behavior, starting with FastAPI lifespan, middleware, and exception handlers.
 - CLI commands using `if __name__ == "__main__"`, `argparse`, Click, and Typer.
 - Executable scripts using `__main__`, shebangs, and common script directories such as `scripts/`, `bin/`, and `tools/`.
 
