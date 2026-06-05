@@ -226,6 +226,7 @@ The analyzer currently detects:
 - explicit FastAPI dependency calls:
   - `Depends(get_current_user)`;
   - `Annotated[User, Depends(get_current_user)]`;
+  - imported dependency aliases such as `SessionDep = Annotated[AsyncSession, Depends(get_session)]`;
 - `await` edges;
 - ambiguous unqualified calls as Uncertain Edges;
 - ambiguous type-based method dispatch as Uncertain Edges.

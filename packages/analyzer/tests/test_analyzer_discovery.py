@@ -142,6 +142,52 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertEqual(entry.route_path, "/api/items/{id}")
         self.assertEqual(entry.label, "GET /api/items/{id}: app/endpoints.py:get_item")
 
+    def test_cli_resolves_fastapi_dependency_type_alias_edges(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app").mkdir()
+            (root / "app" / "__init__.py").write_text("", encoding="utf-8")
+            (root / "app" / "deps.py").write_text(
+                textwrap.dedent(
+                    """
+                    from typing import Annotated
+                    from fastapi import Depends
+
+                    def get_session():
+                        return None
+
+                    SessionDep = Annotated[object, Depends(get_session)]
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "app" / "routes.py").write_text(
+                textwrap.dedent(
+                    """
+                    from app.deps import SessionDep
+
+                    @router.get('/items')
+                    async def list_items(session: SessionDep):
+                        return []
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        reason_codes = {edge["evidence"]["reason"]["code"] for edge in graph["edges"]}
+        self.assertIn("fastapi_dependency_alias_call", reason_codes)
+        self.assertEqual(len(graph["flows"][0]["edge_ids"]), 1)
+        self.assertEqual(len(graph["flows"][0]["node_ids"]), 2)
+
     def test_cli_resolves_fastapi_dependency_edges(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

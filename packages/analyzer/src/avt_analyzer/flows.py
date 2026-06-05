@@ -79,6 +79,7 @@ class _AnalysisContext:
         self.classes_by_name = _classes_by_name(discovery.classes)
         self.classes_by_module_qualified_name = _classes_by_module_qualified_name(discovery.modules, discovery.classes)
         self.import_aliases_by_path = _import_aliases_by_path(discovery)
+        self.fastapi_dependency_aliases_by_path = _fastapi_dependency_aliases_by_path(self)
         self.argparse_dispatch_targets = _argparse_dispatch_targets(self)
 
 
@@ -174,6 +175,12 @@ def _calls_from_function(context: _AnalysisContext, function: FunctionInfo) -> l
     edges: list[FlowEdge] = []
     seen: set[str] = set()
     variable_types = _collect_variable_types(context, function)
+    for dependency_edge in _parameter_dependency_edges(context, function):
+        if dependency_edge.edge["id"] in seen:
+            continue
+        seen.add(dependency_edge.edge["id"])
+        edges.append(dependency_edge)
+
     for call, is_await in calls:
         call_name = _dotted_name(call.func)
         if call_name is None:
@@ -218,6 +225,28 @@ def _calls_from_function(context: _AnalysisContext, function: FunctionInfo) -> l
                 continue
             seen.add(edge["id"])
             edges.append(FlowEdge(edge=edge, target=None))
+    return sorted(edges, key=lambda item: item.edge["id"])
+
+
+def _parameter_dependency_edges(context: _AnalysisContext, function: FunctionInfo) -> list[FlowEdge]:
+    aliases = context.fastapi_dependency_aliases_by_path.get(function.relative_path, {})
+    edges: list[FlowEdge] = []
+    for arg in [*function.node.args.posonlyargs, *function.node.args.args, *function.node.args.kwonlyargs]:
+        if arg.annotation is None:
+            continue
+        dependency = aliases.get(ast.unparse(arg.annotation))
+        if dependency is None:
+            continue
+        edge = _build_edge(
+            function,
+            dependency,
+            arg.annotation,
+            "call",
+            "confirmed",
+            "fastapi_dependency_alias_call",
+            f"Resolved FastAPI dependency alias {ast.unparse(arg.annotation)}",
+        )
+        edges.append(FlowEdge(edge=edge, target=dependency))
     return sorted(edges, key=lambda item: item.edge["id"])
 
 
@@ -579,6 +608,65 @@ def _module_name_from_parts(parts: list[str]) -> str | None:
     else:
         module_parts = parts
     return ".".join(part for part in module_parts if part) or None
+
+
+def _fastapi_dependency_aliases_by_path(context: _AnalysisContext) -> dict[str, dict[str, FunctionInfo]]:
+    alias_definitions_by_path: dict[str, dict[str, FunctionInfo]] = {}
+    alias_definitions_by_qualified_name: dict[str, FunctionInfo] = {}
+
+    for module in context.discovery.modules:
+        module_aliases: dict[str, FunctionInfo] = {}
+        for stmt in module.tree.body:
+            target_names = _assignment_target_names(stmt)
+            if not target_names:
+                continue
+            value = stmt.value if isinstance(stmt, (ast.Assign, ast.AnnAssign)) else None
+            dependency_name = _annotated_dependency_name(value)
+            if dependency_name is None:
+                continue
+            dependency = _resolve_function_reference(context, module.relative_path, dependency_name)
+            if dependency is None:
+                continue
+            for target_name in target_names:
+                module_aliases[target_name] = dependency
+                for module_name in _module_name_aliases(module):
+                    alias_definitions_by_qualified_name[f"{module_name}.{target_name}"] = dependency
+        alias_definitions_by_path[module.relative_path] = module_aliases
+
+    resolved = {path: dict(aliases) for path, aliases in alias_definitions_by_path.items()}
+    for path, imports in context.import_aliases_by_path.items():
+        for local_name, imported_name in imports.items():
+            dependency = alias_definitions_by_qualified_name.get(imported_name)
+            if dependency is not None:
+                resolved.setdefault(path, {})[local_name] = dependency
+    return resolved
+
+
+def _assignment_target_names(stmt: ast.stmt) -> tuple[str, ...]:
+    if isinstance(stmt, ast.Assign):
+        return tuple(target.id for target in stmt.targets if isinstance(target, ast.Name))
+    if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+        return (stmt.target.id,)
+    return ()
+
+
+def _annotated_dependency_name(node: ast.AST | None) -> str | None:
+    if not isinstance(node, ast.Subscript):
+        return None
+    annotated_name = _dotted_name(node.value)
+    if annotated_name not in {"Annotated", "typing.Annotated"}:
+        return None
+    slice_values = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+    for item in slice_values[1:]:
+        if not isinstance(item, ast.Call):
+            continue
+        call_name = _dotted_name(item.func)
+        if call_name is None:
+            continue
+        dependency_name = _fastapi_dependency_name(call_name, item)
+        if dependency_name is not None:
+            return dependency_name
+    return None
 
 
 def _argparse_dispatch_targets(context: _AnalysisContext) -> dict[str, tuple[FunctionInfo, ...]]:
