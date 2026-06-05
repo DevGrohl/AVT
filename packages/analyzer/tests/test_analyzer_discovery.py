@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import textwrap
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from avt_analyzer.entrypoints import discover_entry_points
+from avt_analyzer.scanner import scan_python_project
+
+
+class AnalyzerDiscoveryTests(unittest.TestCase):
+    def test_scanner_excludes_tests_and_migrations_by_default(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text("def main():\n    pass\n", encoding="utf-8")
+            (root / "tests").mkdir()
+            (root / "tests" / "test_app.py").write_text("def test_main():\n    pass\n", encoding="utf-8")
+            (root / "migrations").mkdir()
+            (root / "migrations" / "001_init.py").write_text("def upgrade():\n    pass\n", encoding="utf-8")
+
+            default_scan = scan_python_project(root)
+            include_tests_scan = scan_python_project(root, include_tests=True)
+
+        self.assertEqual([file.relative_path for file in default_scan.files], ["app.py"])
+        self.assertEqual([file.relative_path for file in include_tests_scan.files], ["app.py", "tests/test_app.py"])
+
+    def test_discovers_web_cli_script_and_manual_entry_points(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @app.get('/items')
+                    def list_items() -> list[str]:
+                        return []
+
+                    @click.command()
+                    def cli(verbose: bool = False):
+                        pass
+
+                    def main():
+                        cli()
+
+                    if __name__ == "__main__":
+                        main()
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            (root / "scripts").mkdir()
+            (root / "scripts" / "tool.py").write_text("def main():\n    pass\n", encoding="utf-8")
+
+            scan = scan_python_project(root)
+            discovery = discover_entry_points(scan, manual_entries=["app.py:list_items"])
+
+        entries = {(entry.kind, entry.function.relative_path, entry.function.qualified_name) for entry in discovery.entry_points}
+        self.assertIn(("web_route", "app.py", "list_items"), entries)
+        self.assertIn(("cli_command", "app.py", "cli"), entries)
+        self.assertIn(("cli_command", "app.py", "main"), entries)
+        self.assertIn(("script", "scripts/tool.py", "main"), entries)
+        self.assertIn(("manual", "app.py", "list_items"), entries)
+
+    def test_cli_writes_graph_with_discovered_entry_points(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @router.post('/submit')
+                    async def submit(payload: dict) -> None:
+                        return None
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            result = subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        self.assertIn("Files scanned: 1", result.stdout)
+        self.assertIn("Entry Points found: 1", result.stdout)
+        self.assertNotIn("generated_at", graph["metadata"])
+        self.assertEqual(graph["entry_points"][0]["kind"], "web_route")
+        self.assertEqual(graph["flows"][0]["node_ids"], [graph["entry_points"][0]["node_id"]])
+
+
+if __name__ == "__main__":
+    unittest.main()

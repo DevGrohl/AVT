@@ -17,11 +17,13 @@ uv run --project packages/analyzer avt analyze . --no-timestamp --out /tmp/avt-g
 
 The analyzer is CLI/library-first. Keep core analysis code reusable so a future API wrapper can call it without shelling out.
 
-## Current scaffold verification
+## Analyzer verification
 
 ```sh
+uv run --project packages/analyzer python -m unittest discover packages/analyzer/tests
 uv run --project packages/analyzer avt analyze . --no-timestamp --out /tmp/avt-graph.json
 python -m json.tool /tmp/avt-graph.json >/dev/null
+uv run --project packages/analyzer avt analyze . --list-entrypoints --no-timestamp
 ```
 
 ## Task tracking

@@ -8,7 +8,9 @@ import sys
 from pathlib import Path
 
 from avt_analyzer import __version__
-from avt_analyzer.graph import build_empty_graph
+from avt_analyzer.entrypoints import discover_entry_points
+from avt_analyzer.graph import build_discovery_graph
+from avt_analyzer.scanner import scan_python_project
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,24 +45,31 @@ def analyze_command(args: argparse.Namespace) -> int:
         candidate = project_path / ".avt" / "overlay.json"
         overlay = candidate if candidate.exists() else None
 
-    # Scanner/parser implementation comes next. This placeholder keeps the
-    # command shape executable while preserving the agreed graph metadata rules.
-    graph = build_empty_graph(
+    scan = scan_python_project(project_path, include_tests=args.include_tests)
+    discovery = discover_entry_points(scan, manual_entries=args.entry)
+    graph = build_discovery_graph(
         project_name=project_path.name,
         analyzer_version=__version__,
+        discovery=discovery,
         include_timestamp=not args.no_timestamp,
     )
+    graph["warnings"] = [*scan.warnings, *graph["warnings"]]
 
     if args.list_entrypoints:
-        print("Entry Points found: 0")
+        for entry in graph["entry_points"]:
+            location = entry["evidence"]["location"]
+            print(f"{entry['kind']}\t{location['path']}:{entry['node_id'].rsplit(':', 1)[-1]}\t{entry['evidence']['reason']['label']}")
+        print(f"Files scanned: {len(scan.files)}")
+        print(f"Entry Points found: {len(graph['entry_points'])}")
+        print(f"Warnings: {len(graph['warnings'])}")
         return 0
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(graph, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    print(f"Files scanned: 0")
-    print(f"Entry Points found: 0")
-    print(f"Flows analyzed: 0")
+    print(f"Files scanned: {len(scan.files)}")
+    print(f"Entry Points found: {len(graph['entry_points'])}")
+    print(f"Flows analyzed: {len(graph['flows'])}")
     print(f"Warnings: {len(graph['warnings'])}")
     print(f"Graph written: {args.out}")
     if overlay is not None:
