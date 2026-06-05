@@ -94,16 +94,7 @@ def build_discovery_graph(
     flow_analysis = analyze_flows(discovery, max_depth=max_depth)
     graph["nodes"] = sorted([*nodes, *flow_analysis.external_nodes], key=lambda node: node["id"])
 
-    graph["entry_points"] = [
-        {
-            "id": entry.id,
-            "kind": entry.kind,
-            "node_id": entry.function.node_id,
-            "label": entry.label,
-            "evidence": entry.evidence,
-        }
-        for entry in discovery.entry_points
-    ]
+    graph["entry_points"] = [_entry_point_payload(entry) for entry in discovery.entry_points]
     graph["edges"] = list(flow_analysis.edges)
     graph["markers"] = list(flow_analysis.markers)
     graph["flows"] = [
@@ -118,3 +109,18 @@ def build_discovery_graph(
     ]
     graph["warnings"] = list(discovery.warnings)
     return graph
+
+
+def _entry_point_payload(entry):
+    payload = {
+        "id": entry.id,
+        "kind": entry.kind,
+        "node_id": entry.function.node_id,
+        "label": entry.label,
+        "evidence": entry.evidence,
+    }
+    if entry.route_path is not None:
+        payload["route_path"] = entry.route_path
+    if entry.http_methods:
+        payload["http_methods"] = list(entry.http_methods)
+    return payload

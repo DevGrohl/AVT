@@ -280,6 +280,7 @@ Top-level JSON keys:
 Important conventions:
 
 - paths are relative to the analyzed project;
+- web route Entry Points include best-effort decorator HTTP method/path metadata when statically available;
 - no source snippets or full source code are embedded;
 - output ordering is deterministic;
 - `--no-timestamp` omits generated timestamps;

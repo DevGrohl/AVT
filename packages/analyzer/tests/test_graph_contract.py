@@ -120,6 +120,11 @@ def _assert_graph_contract(testcase: unittest.TestCase, graph: dict[str, Any]) -
     for entry in graph["entry_points"]:
         testcase.assertIn(entry["kind"], {"web_route", "cli_command", "script", "manual"})
         testcase.assertIn(entry["node_id"], node_ids)
+        if "route_path" in entry:
+            testcase.assertIsInstance(entry["route_path"], str)
+        if "http_methods" in entry:
+            testcase.assertIsInstance(entry["http_methods"], list)
+            testcase.assertTrue(all(isinstance(method, str) for method in entry["http_methods"]))
         _assert_evidence_contract(testcase, entry["evidence"])
 
     for flow in graph["flows"]:

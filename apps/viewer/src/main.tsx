@@ -184,6 +184,9 @@ function EntryPointSummary({ entryPoint }: { entryPoint: EntryPoint }) {
     <section className="summaryBlock">
       <h3>Entry Point</h3>
       <p><strong>{entryPoint.kind}</strong></p>
+      {entryPoint.http_methods?.length || entryPoint.route_path ? (
+        <p><code>{entryPoint.http_methods?.join(', ') || 'ROUTE'} {entryPoint.route_path ?? '?'}</code></p>
+      ) : null}
       <p>{entryPoint.evidence.location.path}:{entryPoint.evidence.location.line}</p>
       <p>{entryPoint.evidence.reason.label}</p>
     </section>

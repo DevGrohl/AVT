@@ -97,6 +97,16 @@ Warnings were output-safety warnings only:
 
 No source values were emitted.
 
+## Route context hardening
+
+Validation showed that endpoint labels were less useful than they should be because a Developer could see the Python function name but not the decorator route method/path. AVT now includes best-effort web route metadata:
+
+- `http_methods`, e.g. `["POST"]`
+- `route_path`, e.g. `/`, `/{id}`, `/toggle`
+- labels such as `POST /: app/api/endpoints/position.py:create_position`
+
+For RealtorCareersAPI, all FastAPI decorator Entry Points now show their local method/path metadata in the graph and viewer. Router-level prefixes are not yet composed into full API paths.
+
 ## FastAPI dependency resolution hardening
 
 Validation showed that explicit FastAPI dependencies such as `Depends(get_current_active_user)` were part of the runtime Execution Flow but were not represented. AVT now emits `fastapi_dependency_call` edges for explicit dependency functions passed to `Depends(...)`, including `Annotated[..., Depends(...)]` annotations.

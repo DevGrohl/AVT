@@ -58,7 +58,11 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
             discovery = discover_entry_points(scan, manual_entries=["app.py:list_items"])
 
         entries = {(entry.kind, entry.function.relative_path, entry.function.qualified_name) for entry in discovery.entry_points}
+        list_items = next(entry for entry in discovery.entry_points if entry.kind == "web_route" and entry.function.qualified_name == "list_items")
         self.assertIn(("web_route", "app.py", "list_items"), entries)
+        self.assertEqual(list_items.route_path, "/items")
+        self.assertEqual(list_items.http_methods, ("GET",))
+        self.assertIn("GET /items", list_items.label)
         self.assertIn(("cli_command", "app.py", "cli"), entries)
         self.assertIn(("cli_command", "app.py", "main"), entries)
         self.assertIn(("script", "scripts/tool.py", "main"), entries)
@@ -89,8 +93,13 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
             discovery = discover_entry_points(scan)
 
         entries = {(entry.kind, entry.function.relative_path, entry.function.qualified_name) for entry in discovery.entry_points}
+        login = next(entry for entry in discovery.entry_points if entry.function.qualified_name == "login_view")
+        publish = next(entry for entry in discovery.entry_points if entry.function.qualified_name == "PageViewSet.publish")
         self.assertIn(("web_route", "views.py", "login_view"), entries)
+        self.assertEqual(login.http_methods, ("POST",))
+        self.assertIn("POST ?", login.label)
         self.assertIn(("web_route", "views.py", "PageViewSet.publish"), entries)
+        self.assertEqual(publish.http_methods, ("POST",))
 
     def test_cli_resolves_fastapi_dependency_edges(self) -> None:
         with TemporaryDirectory() as temp:

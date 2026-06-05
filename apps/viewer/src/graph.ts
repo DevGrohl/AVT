@@ -55,6 +55,8 @@ export interface EntryPoint {
   node_id: string;
   label: string;
   evidence: Evidence;
+  route_path?: string;
+  http_methods?: string[];
 }
 
 export interface FlowMarker {

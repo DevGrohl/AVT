@@ -62,6 +62,8 @@ class EntryPointCandidate:
     kind: EntryPointKind
     function: FunctionInfo
     evidence: Evidence
+    route_path: str | None = None
+    http_methods: tuple[str, ...] = ()
 
     @property
     def id(self) -> str:
@@ -70,6 +72,10 @@ class EntryPointCandidate:
 
     @property
     def label(self) -> str:
+        if self.kind == "web_route" and (self.http_methods or self.route_path):
+            methods = ",".join(self.http_methods) if self.http_methods else "ROUTE"
+            path = self.route_path or "?"
+            return f"{methods} {path}: {self.function.relative_path}:{self.function.qualified_name}"
         return f"{self.kind}: {self.function.relative_path}:{self.function.qualified_name}"
 
 
@@ -111,8 +117,8 @@ def discover_entry_points(scan: ScanResult, *, manual_entries: Iterable[str] = (
                 reason = _decorator_entry_reason(decorator)
                 if reason is None:
                     continue
-                kind, code, label = reason
-                _add_candidate(candidates, seen, kind, fn, decorator, code, label)
+                kind, code, label, route_path, http_methods = reason
+                _add_candidate(candidates, seen, kind, fn, decorator, code, label, route_path, http_methods)
 
         for call in _main_guard_calls(python_file.tree):
             target_name = _called_name(call)
@@ -188,7 +194,7 @@ def _collect_symbols(python_file: PythonFile) -> tuple[list[ClassInfo], list[Fun
     return classes, functions
 
 
-def _decorator_entry_reason(decorator: ast.expr) -> tuple[EntryPointKind, str, str] | None:
+def _decorator_entry_reason(decorator: ast.expr) -> tuple[EntryPointKind, str, str, str | None, tuple[str, ...]] | None:
     target = decorator.func if isinstance(decorator, ast.Call) else decorator
     dotted = _dotted_name(target)
     if dotted is None:
@@ -210,9 +216,11 @@ def _decorator_entry_reason(decorator: ast.expr) -> tuple[EntryPointKind, str, s
         "api_view",
         "action",
     }:
-        return "web_route", "web_route_decorator", f"Web route decorator @{dotted}"
+        route_path = _route_path(decorator)
+        http_methods = _http_methods(last, decorator)
+        return "web_route", "web_route_decorator", f"Web route decorator @{dotted}", route_path, http_methods
     if last in {"command", "group", "callback"}:
-        return "cli_command", "cli_decorator", f"CLI command decorator @{dotted}"
+        return "cli_command", "cli_decorator", f"CLI command decorator @{dotted}", None, ()
     return None
 
 
@@ -251,6 +259,8 @@ def _add_candidate(
     node: ast.AST,
     reason_code: str,
     reason_label: str,
+    route_path: str | None = None,
+    http_methods: tuple[str, ...] = (),
 ) -> None:
     line = getattr(node, "lineno", fn.node.lineno)
     key = (kind, fn.relative_path, fn.qualified_name, line)
@@ -265,8 +275,54 @@ def _add_candidate(
                 "location": _source_location(fn.relative_path, node),
                 "reason": {"code": reason_code, "label": reason_label},
             },
+            route_path=route_path,
+            http_methods=http_methods,
         )
     )
+
+
+def _route_path(decorator: ast.expr) -> str | None:
+    if not isinstance(decorator, ast.Call) or not decorator.args:
+        return None
+    first_arg = decorator.args[0]
+    if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+        return first_arg.value
+    return None
+
+
+def _http_methods(decorator_name: str, decorator: ast.expr) -> tuple[str, ...]:
+    if decorator_name in {"get", "post", "put", "delete", "patch", "options", "head"}:
+        return (decorator_name.upper(),)
+    if decorator_name == "websocket":
+        return ("WEBSOCKET",)
+    if decorator_name in {"route", "api_route", "action"} and isinstance(decorator, ast.Call):
+        methods = _string_list_keyword(decorator, "methods")
+        if methods:
+            return tuple(sorted(method.upper() for method in methods))
+    if decorator_name == "api_view" and isinstance(decorator, ast.Call) and decorator.args:
+        methods = _string_list(decorator.args[0])
+        if methods:
+            return tuple(sorted(method.upper() for method in methods))
+    return ()
+
+
+def _string_list_keyword(call: ast.Call, keyword_name: str) -> tuple[str, ...]:
+    for keyword in call.keywords:
+        if keyword.arg == keyword_name:
+            return _string_list(keyword.value)
+    return ()
+
+
+def _string_list(node: ast.AST) -> tuple[str, ...]:
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        values = []
+        for item in node.elts:
+            if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                values.append(item.value)
+        return tuple(values)
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return (node.value,)
+    return ()
 
 
 def _called_name(call: ast.Call) -> str | None:

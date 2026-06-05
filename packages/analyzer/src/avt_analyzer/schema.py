@@ -66,6 +66,8 @@ class EntryPoint(TypedDict):
     node_id: str
     label: str
     evidence: Evidence
+    route_path: NotRequired[str]
+    http_methods: NotRequired[list[str]]
 
 
 class FlowMarker(TypedDict):
