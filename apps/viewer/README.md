@@ -119,8 +119,10 @@ Hierarchy context is shown by including ancestor module/class nodes for visible 
 
 Use **Diagram layout** to switch how the same selected flow is drawn:
 
-- **Layered flow** — default flow-oriented view. Places roots on the left and reachable calls/interactions in later columns while keeping module/class context as container swimlanes when context is enabled. Layout changes force a fresh fit-to-view.
-- **Hierarchy by module/class** — ownership-oriented view. Renders modules and classes as container areas so owned functions/methods sit inside their structural context.
+- **Nested ownership map** — modules/classes are container areas that own their functions/methods.
+- **Swimlane hierarchy** — each module becomes a horizontal lane; classes/functions sit inside the lane to reduce overlap.
+- **Outline + focused graph** — hierarchy becomes a compact left outline while behavior nodes remain in the main flow graph.
+- **Layered flow** — flow-oriented view. Places roots on the left and reachable calls/interactions in later columns while keeping module/class context as container swimlanes when context is enabled. Layout changes force a fresh fit-to-view.
 - **Circular relationships** — relationship overview for spotting clusters/cycles in dense graphs.
 - **Compact grid** — dense scan-friendly layout when labels/lists matter more than edge geometry.
 

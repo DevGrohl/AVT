@@ -11,7 +11,7 @@ type InspectorSelection =
   | { type: 'edge'; item: GraphEdge }
   | null;
 
-type DiagramLayout = 'hierarchy' | 'layered' | 'circular' | 'grid';
+type DiagramLayout = 'hierarchy-nested' | 'hierarchy-swimlane' | 'hierarchy-outline' | 'layered' | 'circular' | 'grid';
 
 type EdgeLabelMode = 'kind' | 'reason' | 'none';
 
@@ -41,7 +41,7 @@ function App() {
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [edgeFilters, setEdgeFilters] = useState<EdgeFilters>({ showConfirmed: true, showUncertain: true, showRejected: false });
-  const [diagramLayout, setDiagramLayout] = useState<DiagramLayout>('layered');
+  const [diagramLayout, setDiagramLayout] = useState<DiagramLayout>('hierarchy-swimlane');
   const [displayOptions, setDisplayOptions] = useState<DiagramDisplayOptions>({
     showHierarchyContext: true,
     showExternalInteractions: true,
@@ -246,8 +246,10 @@ function DiagramLayoutControls({ layout, onChange }: { layout: DiagramLayout; on
       <h3>Diagram layout</h3>
       <label className="selectLabel" htmlFor="diagramLayout">Handling</label>
       <select id="diagramLayout" value={layout} onChange={(event) => onChange(event.target.value as DiagramLayout)}>
+        <option value="hierarchy-nested">Nested ownership map</option>
+        <option value="hierarchy-swimlane">Swimlane hierarchy</option>
+        <option value="hierarchy-outline">Outline + focused graph</option>
         <option value="layered">Layered flow</option>
-        <option value="hierarchy">Hierarchy by module/class</option>
         <option value="circular">Circular relationships</option>
         <option value="grid">Compact grid</option>
       </select>
@@ -359,8 +361,10 @@ function FlowHeader({ flow, label, nodeCount, edgeCount, layout }: { flow: Execu
 }
 
 function layoutDescription(layout: DiagramLayout): string {
+  if (layout === 'hierarchy-nested') return 'Nested ownership map: modules/classes are areas that own their functions and methods.';
+  if (layout === 'hierarchy-swimlane') return 'Swimlane hierarchy: each module becomes a lane, preserving ownership while reducing overlap.';
+  if (layout === 'hierarchy-outline') return 'Outline + focused graph: hierarchy is a compact left outline; behavior flow stays on the main canvas.';
   if (layout === 'layered') return 'Layered flow: call-flow columns with structural context areas when enabled.';
-  if (layout === 'hierarchy') return 'Hierarchy: module/class areas own their functions and methods.';
   if (layout === 'circular') return 'Circular: relationship overview for spotting clusters and cycles.';
   return 'Compact grid: dense scan-friendly layout.';
 }
@@ -682,10 +686,15 @@ function diagramLayoutModel(
   layout: DiagramLayout,
   showHierarchyContext: boolean,
 ): DiagramLayoutModel {
-  if (layout === 'hierarchy') {
+  if (layout === 'hierarchy-nested') {
     const positions = hierarchyPositions(nodes, nodeById);
     return showHierarchyContext ? areaLayout(nodes, nodeById, positions) : emptyLayoutModel(positions);
   }
+  if (layout === 'hierarchy-swimlane') {
+    const positions = swimlaneHierarchyPositions(nodes, nodeById);
+    return showHierarchyContext ? areaLayout(nodes, nodeById, positions) : emptyLayoutModel(positions);
+  }
+  if (layout === 'hierarchy-outline') return emptyLayoutModel(outlineFocusedPositions(nodes, edges, nodeById));
   if (layout === 'circular') return emptyLayoutModel(circularPositions(nodes));
   if (layout === 'grid') return emptyLayoutModel(gridPositions(nodes));
   const positions = layeredPositions(nodes, edges, nodeById);
@@ -798,6 +807,53 @@ function containerDepth(node: GraphNode, nodeById: Map<string, GraphNode>): numb
     current = parent;
   }
   return depth;
+}
+
+function swimlaneHierarchyPositions(nodes: GraphNode[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const modules = nodes.filter((node) => node.kind === 'module').sort(compareHierarchyNodes);
+  const internals = nodes.filter((node) => node.kind !== 'module' && node.kind !== 'external');
+  const externals = nodes.filter((node) => node.kind === 'external').sort(compareHierarchyNodes);
+  let laneY = 0;
+
+  for (const module of modules) {
+    const descendants = internals.filter((node) => hasAncestor(node, module.id, nodeById) || node.parent_id === module.id).sort(compareHierarchyNodes);
+    const laneHeight = Math.max(220, descendants.length * 110 + 120);
+    positions.set(module.id, { x: 0, y: laneY });
+
+    const moduleFunctions = descendants.filter((node) => (node.kind === 'function' || node.kind === 'method') && directModuleParent(node, module.id, nodeById));
+    moduleFunctions.forEach((node, index) => positions.set(node.id, { x: 360 + (index % 3) * 280, y: laneY + 90 + Math.floor(index / 3) * 120 }));
+
+    const classes = descendants.filter((node) => node.kind === 'class');
+    let classY = laneY + 90 + Math.ceil(moduleFunctions.length / 3) * 120;
+    for (const cls of classes) {
+      positions.set(cls.id, { x: 320, y: classY });
+      const members = descendants.filter((node) => (node.kind === 'function' || node.kind === 'method') && hasAncestor(node, cls.id, nodeById));
+      members.forEach((member, index) => positions.set(member.id, { x: 620 + (index % 2) * 280, y: classY + 80 + Math.floor(index / 2) * 110 }));
+      classY += Math.max(150, Math.ceil(members.length / 2) * 110 + 120);
+    }
+
+    laneY += Math.max(laneHeight, classY - laneY) + 96;
+  }
+
+  const positioned = new Set(positions.keys());
+  internals.filter((node) => !positioned.has(node.id)).forEach((node, index) => positions.set(node.id, { x: 360, y: laneY + index * 120 }));
+  externals.forEach((node, index) => positions.set(node.id, { x: 1280, y: index * 120 }));
+  return positions;
+}
+
+function outlineFocusedPositions(nodes: GraphNode[], edges: GraphEdge[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const hierarchyNodes = nodes.filter((node) => node.kind === 'module' || node.kind === 'class').sort(compareHierarchyNodes);
+  hierarchyNodes.forEach((node, index) => positions.set(node.id, { x: node.kind === 'module' ? 0 : 240, y: index * 82 }));
+
+  const focusNodes = nodes.filter((node) => node.kind !== 'module' && node.kind !== 'class');
+  const focusPositions = layeredPositions(focusNodes, edges, nodeById);
+  for (const node of focusNodes) {
+    const position = focusPositions.get(node.id) ?? { x: 0, y: 0 };
+    positions.set(node.id, { x: position.x + 620, y: position.y });
+  }
+  return positions;
 }
 
 function layeredPositions(nodes: GraphNode[], edges: GraphEdge[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {
