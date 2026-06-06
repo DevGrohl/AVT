@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ReactFlow, Background, Controls, MiniMap, type Edge as FlowEdge, type Node as FlowNode } from '@xyflow/react';
+import { ReactFlow, Background, Controls, MiniMap, type Edge as FlowEdge, type Node as FlowNode, type XYPosition } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
 import type { EntryPoint, ExecutionFlow, ExecutionFlowGraph, FlowMarker, GraphEdge, GraphNode, GuideFile } from './graph';
@@ -34,12 +34,15 @@ interface FlowSelectionOption {
   entryPointIds: string[];
 }
 
+type PositionOverrides = Record<string, Record<string, XYPosition>>;
+
 function App() {
   const [graph, setGraph] = useState<ExecutionFlowGraph | null>(null);
   const [guide, setGuide] = useState<GuideFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
+  const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
   const [edgeFilters, setEdgeFilters] = useState<EdgeFilters>({ showConfirmed: true, showUncertain: true, showRejected: false });
   const [diagramLayout, setDiagramLayout] = useState<DiagramLayout>('hierarchy-swimlane');
   const [displayOptions, setDisplayOptions] = useState<DiagramDisplayOptions>({
@@ -79,6 +82,14 @@ function App() {
     return buildFlowModel(graph, selectedFlow, edgeFilters, diagramLayout, displayOptions);
   }, [graph, selectedFlow, edgeFilters, diagramLayout, displayOptions]);
 
+  const editKey = selectedFlow ? layoutEditKey(selectedFlow.id, diagramLayout, displayOptions) : '';
+  const currentOverrides = editKey ? positionOverrides[editKey] ?? {} : {};
+  const editedNodeCount = Object.keys(currentOverrides).length;
+  const displayedReactFlowNodes = useMemo(
+    () => flowModel.reactFlowNodes.map((node) => currentOverrides[node.id] ? { ...node, position: currentOverrides[node.id] } : node),
+    [flowModel.reactFlowNodes, currentOverrides],
+  );
+
   async function handleGuideSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -98,6 +109,7 @@ function App() {
     try {
       const nextGraph = await parseGraph(await file.text());
       setGraph(nextGraph);
+      setPositionOverrides({});
       setSelectedSelectionId(defaultSelectionId(nextGraph));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -163,17 +175,42 @@ function App() {
           <section className="panel flowPanel">
             {selectedFlow ? (
               <>
-                <FlowHeader flow={selectedFlow} label={selectedOption?.label ?? selectedFlow.id} nodeCount={flowModel.flowNodes.length} edgeCount={flowModel.flowEdges.length} layout={diagramLayout} />
+                <FlowHeader
+                  flow={selectedFlow}
+                  label={selectedOption?.label ?? selectedFlow.id}
+                  nodeCount={flowModel.flowNodes.length}
+                  edgeCount={flowModel.flowEdges.length}
+                  layout={diagramLayout}
+                  editedNodeCount={editedNodeCount}
+                  onResetLayout={() => {
+                    if (!editKey) return;
+                    setPositionOverrides((previous) => {
+                      const next = { ...previous };
+                      delete next[editKey];
+                      return next;
+                    });
+                  }}
+                />
                 <div className="graphCanvas" aria-label="Selected Execution Flow graph">
                   <ReactFlow
                     key={`${selectedFlow.id}:${diagramLayout}:${displayOptions.showHierarchyContext}:${displayOptions.showExternalInteractions}:${displayOptions.edgeLabelMode}`}
-                    nodes={flowModel.reactFlowNodes}
+                    nodes={displayedReactFlowNodes}
                     edges={flowModel.reactFlowEdges}
                     fitView
                     fitViewOptions={{ padding: 0.18 }}
                     onNodeClick={(_: React.MouseEvent, node: FlowNode) => {
                       const graphNode = flowModel.nodeById.get(String(node.id));
                       if (graphNode) setSelection({ type: 'node', item: graphNode, markers: flowModel.markersByNodeId.get(graphNode.id) ?? [] });
+                    }}
+                    onNodeDragStop={(_, node: FlowNode) => {
+                      if (!editKey) return;
+                      setPositionOverrides((previous) => ({
+                        ...previous,
+                        [editKey]: {
+                          ...(previous[editKey] ?? {}),
+                          [String(node.id)]: node.position,
+                        },
+                      }));
                     }}
                     onEdgeClick={(_: React.MouseEvent, edge: FlowEdge) => {
                       const graphEdge = flowModel.edgeById.get(String(edge.id));
@@ -343,7 +380,27 @@ function EdgeFilterControls({ filters, onChange }: { filters: EdgeFilters; onCha
   );
 }
 
-function FlowHeader({ flow, label, nodeCount, edgeCount, layout }: { flow: ExecutionFlow; label: string; nodeCount: number; edgeCount: number; layout: DiagramLayout }) {
+function layoutEditKey(flowId: string, layout: DiagramLayout, options: DiagramDisplayOptions): string {
+  return `${flowId}:${layout}:context=${options.showHierarchyContext}:external=${options.showExternalInteractions}:labels=${options.edgeLabelMode}`;
+}
+
+function FlowHeader({
+  flow,
+  label,
+  nodeCount,
+  edgeCount,
+  layout,
+  editedNodeCount,
+  onResetLayout,
+}: {
+  flow: ExecutionFlow;
+  label: string;
+  nodeCount: number;
+  edgeCount: number;
+  layout: DiagramLayout;
+  editedNodeCount: number;
+  onResetLayout: () => void;
+}) {
   return (
     <div className="flowHeader">
       <div>
@@ -355,6 +412,8 @@ function FlowHeader({ flow, label, nodeCount, edgeCount, layout }: { flow: Execu
         <span>{nodeCount} visible nodes</span>
         <span>{edgeCount} visible edges</span>
         <span>{flow.marker_ids.length} markers</span>
+        {editedNodeCount ? <span>{editedNodeCount} moved</span> : null}
+        <button className="linkButton" type="button" onClick={onResetLayout} disabled={!editedNodeCount}>Reset layout</button>
       </div>
     </div>
   );

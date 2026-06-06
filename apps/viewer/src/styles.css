@@ -104,6 +104,11 @@ button.linkButton {
   font-weight: 800;
 }
 
+button.linkButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .secondaryPicker {
   color: #315efb;
   background: #eef3ff;

@@ -134,6 +134,8 @@ Use **Diagram handling** to tune what the diagram shows:
 
 The graph canvas is intentionally larger than the text details area because visual exploration is the primary product interaction.
 
+Diagrams are editable in the current browser session: drag nodes to adjust the layout. Moved positions are remembered per selected flow/layout/handling combination until a new graph is loaded or **Reset layout** is clicked.
+
 These options are inspired by database diagram tools such as DataGrip: the graph data stays the same, but layout and handling change depending on what the Developer is trying to understand.
 
 ### Inspector
