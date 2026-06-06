@@ -52,6 +52,9 @@ uv run --project packages/analyzer avt analyze --input /absolute/path/to/repo --
 Useful variants:
 
 ```sh
+# Generate the v1 RealtorCareersAPI validation graph and run sanity checks
+scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
+
 # List discovered Entry Points only
 uv run --project packages/analyzer avt analyze . --list-entrypoints
 

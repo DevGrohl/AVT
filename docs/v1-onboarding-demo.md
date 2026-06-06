@@ -38,17 +38,24 @@ The primary validation target is `/mnt/shared/Documents/Projects/RealtorCareersA
 From the AVT repo root:
 
 ```sh
-uv run --project packages/analyzer avt analyze \
-  /mnt/shared/Documents/Projects/RealtorCareersAPI \
-  --no-timestamp \
-  --out /tmp/avt-realtor-v1.json
-
-python -m json.tool /tmp/avt-realtor-v1.json >/dev/null
+scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
 
 cd apps/viewer
 npm install
 npm run dev
 ```
+
+Equivalent raw analyzer command:
+
+```sh
+uv run --project packages/analyzer avt analyze \
+  /mnt/shared/Documents/Projects/RealtorCareersAPI \
+  --no-timestamp \
+  --out /tmp/avt-realtor-v1.json
+python -m json.tool /tmp/avt-realtor-v1.json >/dev/null
+```
+
+Set `AVT_REALTOR_TARGET=/absolute/path/to/RealtorCareersAPI` if the validation target lives elsewhere.
 
 Open the printed viewer URL, then load `/tmp/avt-realtor-v1.json` with **Load graph JSON**.
 
@@ -120,12 +127,8 @@ V1 is not accepted if:
 # Analyzer tests
 uv run --project packages/analyzer python -m unittest discover packages/analyzer/tests
 
-# RealtorCareersAPI graph
-uv run --project packages/analyzer avt analyze \
-  /mnt/shared/Documents/Projects/RealtorCareersAPI \
-  --no-timestamp \
-  --out /tmp/avt-realtor-v1.json
-python -m json.tool /tmp/avt-realtor-v1.json >/dev/null
+# RealtorCareersAPI graph and sanity checks
+scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
 
 # Viewer smoke
 cd apps/viewer
