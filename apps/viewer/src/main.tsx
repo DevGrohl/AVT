@@ -328,34 +328,40 @@ function FlowHeader({ flow, label, nodeCount, edgeCount }: { flow: ExecutionFlow
 }
 
 function FlowLists({ nodes, edges, markersByNodeId }: { nodes: GraphNode[]; edges: GraphEdge[]; markersByNodeId: Map<string, FlowMarker[]> }) {
+  const nodePreview = nodes.slice(0, 8);
+  const edgePreview = edges.slice(0, 8);
   return (
-    <div className="columns lowerLists">
-      <section>
-        <h3>Visible nodes</h3>
-        <ul className="itemList">
-          {nodes.map((node) => (
-            <li key={node.id}>
-              <span className={`kind kind-${node.kind}`}>{node.kind}</span>
-              <strong>{node.label}</strong>
-              {node.signature ? <code>{node.signature}</code> : null}
-              {(markersByNodeId.get(node.id) ?? []).length > 0 ? <p>{markersByNodeId.get(node.id)?.length} Flow Marker(s)</p> : null}
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section>
-        <h3>Visible edges</h3>
-        <ul className="itemList">
-          {edges.map((edge) => (
-            <li key={edge.id}>
-              <span className={`certainty certainty-${edge.certainty}`}>{edge.certainty}</span>
-              <strong>{edge.kind}</strong>
-              <p>{edge.evidence.reason.label}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+    <details className="lowerLists compactDetails">
+      <summary>Visible details ({nodes.length} nodes, {edges.length} edges)</summary>
+      <div className="columns compactDetailsBody">
+        <section>
+          <h3>Nodes preview</h3>
+          <ul className="itemList compactItems">
+            {nodePreview.map((node) => (
+              <li key={node.id}>
+                <span className={`kind kind-${node.kind}`}>{node.kind}</span>
+                <strong>{node.label}</strong>
+                {(markersByNodeId.get(node.id) ?? []).length > 0 ? <p>{markersByNodeId.get(node.id)?.length} Flow Marker(s)</p> : null}
+              </li>
+            ))}
+          </ul>
+          {nodes.length > nodePreview.length ? <p className="hint">Showing first {nodePreview.length}; use graph/inspector for primary navigation.</p> : null}
+        </section>
+        <section>
+          <h3>Edges preview</h3>
+          <ul className="itemList compactItems">
+            {edgePreview.map((edge) => (
+              <li key={edge.id}>
+                <span className={`certainty certainty-${edge.certainty}`}>{edge.certainty}</span>
+                <strong>{edge.kind}</strong>
+                <p>{edge.evidence.reason.label}</p>
+              </li>
+            ))}
+          </ul>
+          {edges.length > edgePreview.length ? <p className="hint">Showing first {edgePreview.length}; click graph edges for details.</p> : null}
+        </section>
+      </div>
+    </details>
   );
 }
 
@@ -629,6 +635,7 @@ function areaLayout(
   const visibleIds = new Set(nodes.map((node) => node.id));
   const parentIds = new Map<string, string>();
   const sizes = new Map<string, { width: number; height: number }>();
+  const absoluteAreas = new Map(absolute);
   const positions = new Map(absolute);
 
   for (const node of nodes) {
@@ -637,38 +644,57 @@ function areaLayout(
     if (parent?.kind === 'module' || parent?.kind === 'class') parentIds.set(node.id, parent.id);
   }
 
-  for (const node of nodes) {
-    const parentId = parentIds.get(node.id);
-    if (!parentId) continue;
-    const parentPosition = absolute.get(parentId) ?? { x: 0, y: 0 };
-    const nodePosition = absolute.get(node.id) ?? { x: 0, y: 0 };
-    positions.set(node.id, {
-      x: Math.max(24, nodePosition.x - parentPosition.x + 32),
-      y: Math.max(52, nodePosition.y - parentPosition.y + 56),
-    });
-  }
-
   const containers = nodes.filter((node) => node.kind === 'class' || node.kind === 'module').sort((a, b) => containerDepth(b, nodeById) - containerDepth(a, nodeById));
   for (const container of containers) {
     const children = nodes.filter((node) => parentIds.get(node.id) === container.id);
-    const minimum = container.kind === 'module' ? { width: 820, height: 180 } : { width: 560, height: 150 };
-    let width = minimum.width;
-    let height = minimum.height;
-    for (const child of children) {
-      const position = positions.get(child.id) ?? { x: 0, y: 0 };
-      const childSize = sizes.get(child.id) ?? defaultNodeSize(child);
-      width = Math.max(width, position.x + childSize.width + 40);
-      height = Math.max(height, position.y + childSize.height + 40);
+    const minimum = defaultNodeSize(container);
+    if (!children.length) {
+      sizes.set(container.id, minimum);
+      continue;
     }
+
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    for (const child of children) {
+      const position = absoluteAreas.get(child.id) ?? absolute.get(child.id) ?? { x: 0, y: 0 };
+      const childSize = sizes.get(child.id) ?? defaultNodeSize(child);
+      minX = Math.min(minX, position.x);
+      minY = Math.min(minY, position.y);
+      maxX = Math.max(maxX, position.x + childSize.width);
+      maxY = Math.max(maxY, position.y + childSize.height);
+    }
+
+    const padding = container.kind === 'module' ? { x: 44, top: 72, bottom: 36 } : { x: 28, top: 60, bottom: 28 };
+    const nextAbsolute = {
+      x: Math.min(absolute.get(container.id)?.x ?? minX - padding.x, minX - padding.x),
+      y: Math.min(absolute.get(container.id)?.y ?? minY - padding.top, minY - padding.top),
+    };
+    const width = Math.max(minimum.width, maxX - nextAbsolute.x + padding.x);
+    const height = Math.max(minimum.height, maxY - nextAbsolute.y + padding.bottom);
+    absoluteAreas.set(container.id, nextAbsolute);
+    positions.set(container.id, nextAbsolute);
     sizes.set(container.id, { width, height });
+  }
+
+  for (const node of nodes) {
+    const parentId = parentIds.get(node.id);
+    if (!parentId) continue;
+    const parentPosition = absoluteAreas.get(parentId) ?? { x: 0, y: 0 };
+    const nodePosition = absoluteAreas.get(node.id) ?? absolute.get(node.id) ?? { x: 0, y: 0 };
+    positions.set(node.id, {
+      x: Math.max(20, nodePosition.x - parentPosition.x),
+      y: Math.max(48, nodePosition.y - parentPosition.y),
+    });
   }
 
   return { positions, parentIds, sizes };
 }
 
 function defaultNodeSize(node: GraphNode): { width: number; height: number } {
-  if (node.kind === 'module') return { width: 820, height: 180 };
-  if (node.kind === 'class') return { width: 560, height: 150 };
+  if (node.kind === 'module') return { width: 300, height: 132 };
+  if (node.kind === 'class') return { width: 260, height: 120 };
   return { width: 220, height: 72 };
 }
 

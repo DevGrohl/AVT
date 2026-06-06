@@ -174,9 +174,9 @@ The left panel includes filters for edge certainty:
 
 Rejected edges are hidden by default.
 
-### Flow lists
+### Flow details
 
-Below the graph canvas, the viewer lists visible nodes and edges as structured text. This is useful when the graph is dense or when using browser search.
+Below the graph canvas, the viewer has a collapsed **Visible details** section with a small preview of nodes and edges. The visual graph is the primary interaction surface; use the details section only when you need a text fallback or quick preview.
 
 ## Graph JSON expectations
 
