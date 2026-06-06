@@ -203,16 +203,6 @@ select {
   margin: 8px 0;
 }
 
-.resizeControls {
-  margin: 12px 0;
-}
-
-.resizeButtonGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
 .hint {
   margin: 8px 0 0;
   color: #65708a;

@@ -35,7 +35,6 @@ interface FlowSelectionOption {
 }
 
 type PositionOverrides = Record<string, Record<string, XYPosition>>;
-type SizeOverrides = Record<string, Record<string, { width: number; height: number }>>;
 
 function App() {
   const [graph, setGraph] = useState<ExecutionFlowGraph | null>(null);
@@ -44,7 +43,6 @@ function App() {
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
-  const [sizeOverrides, setSizeOverrides] = useState<SizeOverrides>({});
   const [edgeFilters, setEdgeFilters] = useState<EdgeFilters>({ showConfirmed: true, showUncertain: true, showRejected: false });
   const [diagramLayout, setDiagramLayout] = useState<DiagramLayout>('hierarchy-swimlane');
   const [displayOptions, setDisplayOptions] = useState<DiagramDisplayOptions>({
@@ -86,16 +84,10 @@ function App() {
 
   const editKey = selectedFlow ? layoutEditKey(selectedFlow.id, diagramLayout, displayOptions) : '';
   const currentOverrides = editKey ? positionOverrides[editKey] ?? {} : {};
-  const currentSizeOverrides = editKey ? sizeOverrides[editKey] ?? {} : {};
-  const editedNodeCount = new Set([...Object.keys(currentOverrides), ...Object.keys(currentSizeOverrides)]).size;
+  const editedNodeCount = Object.keys(currentOverrides).length;
   const displayedReactFlowNodes = useMemo(
-    () => flowModel.reactFlowNodes.map((node) => {
-      const positioned = currentOverrides[node.id] ? { ...node, position: currentOverrides[node.id] } : { ...node };
-      const size = currentSizeOverrides[node.id];
-      if (!size) return positioned;
-      return { ...positioned, style: { ...positioned.style, width: size.width, height: size.height } };
-    }),
-    [flowModel.reactFlowNodes, currentOverrides, currentSizeOverrides],
+    () => flowModel.reactFlowNodes.map((node) => currentOverrides[node.id] ? { ...node, position: currentOverrides[node.id] } : node),
+    [flowModel.reactFlowNodes, currentOverrides],
   );
 
   async function handleGuideSelected(event: React.ChangeEvent<HTMLInputElement>) {
@@ -118,7 +110,6 @@ function App() {
       const nextGraph = await parseGraph(await file.text());
       setGraph(nextGraph);
       setPositionOverrides({});
-      setSizeOverrides({});
       setSelectedSelectionId(defaultSelectionId(nextGraph));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -178,24 +169,7 @@ function App() {
                 setSelection(null);
               }}
             />
-            <Inspector
-              selection={selection}
-              size={selection?.type === 'node' ? currentSizeForNode(selection.item, displayedReactFlowNodes) : undefined}
-              onResize={(node, delta) => {
-                if (!editKey) return;
-                const currentSize = currentSizeForNode(node, displayedReactFlowNodes) ?? defaultNodeSize(node);
-                setSizeOverrides((previous) => ({
-                  ...previous,
-                  [editKey]: {
-                    ...(previous[editKey] ?? {}),
-                    [node.id]: {
-                      width: Math.max(160, currentSize.width + delta.width),
-                      height: Math.max(96, currentSize.height + delta.height),
-                    },
-                  },
-                }));
-              }}
-            />
+            <Inspector selection={selection} />
           </aside>
 
           <section className="panel flowPanel">
@@ -211,11 +185,6 @@ function App() {
                   onResetLayout={() => {
                     if (!editKey) return;
                     setPositionOverrides((previous) => {
-                      const next = { ...previous };
-                      delete next[editKey];
-                      return next;
-                    });
-                    setSizeOverrides((previous) => {
                       const next = { ...previous };
                       delete next[editKey];
                       return next;
@@ -443,7 +412,7 @@ function FlowHeader({
         <span>{nodeCount} visible nodes</span>
         <span>{edgeCount} visible edges</span>
         <span>{flow.marker_ids.length} markers</span>
-        {editedNodeCount ? <span>{editedNodeCount} edited</span> : null}
+        {editedNodeCount ? <span>{editedNodeCount} moved</span> : null}
         <button className="linkButton" type="button" onClick={onResetLayout} disabled={!editedNodeCount}>Reset layout</button>
       </div>
     </div>
@@ -497,15 +466,7 @@ function FlowLists({ nodes, edges, markersByNodeId }: { nodes: GraphNode[]; edge
   );
 }
 
-function Inspector({
-  selection,
-  size,
-  onResize,
-}: {
-  selection: InspectorSelection;
-  size?: { width: number; height: number };
-  onResize: (node: GraphNode, delta: { width: number; height: number }) => void;
-}) {
+function Inspector({ selection }: { selection: InspectorSelection }) {
   if (!selection) {
     return (
       <section className="summaryBlock inspector">
@@ -524,18 +485,6 @@ function Inspector({
         {selection.item.path ? <p>{selection.item.path}</p> : null}
         {selection.item.qualified_name ? <code>{selection.item.qualified_name}</code> : null}
         {selection.item.signature ? <code>{selection.item.signature}</code> : null}
-        {selection.item.kind === 'module' || selection.item.kind === 'class' ? (
-          <div className="resizeControls">
-            <h4>Container size</h4>
-            {size ? <p className="hint">{Math.round(size.width)} × {Math.round(size.height)}</p> : null}
-            <div className="resizeButtonGrid">
-              <button className="linkButton" type="button" onClick={() => onResize(selection.item, { width: 80, height: 0 })}>Wider</button>
-              <button className="linkButton" type="button" onClick={() => onResize(selection.item, { width: -80, height: 0 })}>Narrower</button>
-              <button className="linkButton" type="button" onClick={() => onResize(selection.item, { width: 0, height: 80 })}>Taller</button>
-              <button className="linkButton" type="button" onClick={() => onResize(selection.item, { width: 0, height: -80 })}>Shorter</button>
-            </div>
-          </div>
-        ) : null}
         {selection.markers.length ? (
           <>
             <h4>Flow Markers</h4>
@@ -557,14 +506,6 @@ function Inspector({
       <p>{selection.item.evidence.location.path}:{selection.item.evidence.location.line}</p>
     </section>
   );
-}
-
-function currentSizeForNode(node: GraphNode, reactFlowNodes: FlowNode[]): { width: number; height: number } | undefined {
-  const flowNode = reactFlowNodes.find((item) => item.id === node.id);
-  const width = typeof flowNode?.style?.width === 'number' ? flowNode.style.width : undefined;
-  const height = typeof flowNode?.style?.height === 'number' ? flowNode.style.height : undefined;
-  if (width === undefined || height === undefined) return undefined;
-  return { width, height };
 }
 
 function entryImportanceScore(graph: ExecutionFlowGraph, entry: EntryPoint): number {
