@@ -146,7 +146,7 @@ The graph canvas is intentionally larger than the text details area because visu
 
 Diagrams are editable in the current browser session: drag nodes to adjust the layout. Moved positions are remembered per selected flow/layout/handling combination until a new graph is loaded or **Reset layout** is clicked.
 
-Use **Export layout JSON** to save manual node positions as an AVT layout overlay. Use **Load layout JSON** to restore those positions later. Layout overlays affect presentation only; they do not change graph facts or source code.
+Use **Export layout JSON** to save manual node positions as an AVT layout overlay. Use **Load layout JSON** to restore those positions later. Layout overlays affect presentation only; they do not change graph facts or source code. See `docs/layout-overlay.md` for the schema.
 
 These options are inspired by database diagram tools such as DataGrip: the graph data stays the same, but layout and handling change depending on what the Developer is trying to understand.
 

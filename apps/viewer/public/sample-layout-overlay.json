@@ -1,0 +1,13 @@
+{
+  "kind": "avt-layout-overlay",
+  "version": 1,
+  "project_name": "sample-project",
+  "positions": {
+    "flow:entry:web_route:app.py:home:1:hierarchy-swimlane:context=true:external=true:labels=kind": {
+      "node:function:app.py:home": {
+        "x": 640,
+        "y": 120
+      }
+    }
+  }
+}

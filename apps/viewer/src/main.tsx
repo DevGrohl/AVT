@@ -106,7 +106,12 @@ function App() {
     try {
       const overlay = parseLayoutOverlay(await file.text());
       setPositionOverrides(overlay.positions);
-      setNotice(`Loaded layout overlay with ${Object.keys(overlay.positions).length} edited view(s).`);
+      const count = Object.keys(overlay.positions).length;
+      if (graph && overlay.project_name && overlay.project_name !== graph.metadata.project_name) {
+        setNotice(`Loaded layout overlay with ${count} edited view(s), but project name differs: ${overlay.project_name} vs ${graph.metadata.project_name}.`);
+      } else {
+        setNotice(`Loaded layout overlay with ${count} edited view(s).`);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
