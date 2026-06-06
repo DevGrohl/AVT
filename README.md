@@ -209,6 +209,7 @@ npm run build
 - `docs/restart-plan.md` — Phase 1 restart plan.
 - `docs/phase2-llm-guide-plan.md` — Phase 2 LLM Guide plan.
 - `docs/layout-overlay.md` — viewer layout overlay schema.
+- `docs/future-lsp-multilanguage-plan.md` — future LSP-assisted multi-language architecture plan.
 - `docs/development.md` — local development commands.
 - `docs/adr/` — architecture decisions.
 - `docs/validation/` — validation notes and QA artifacts, including Phase 2 Guide validation.
