@@ -84,7 +84,7 @@ The left panel shows:
 
 ### Entry Point / Group selector
 
-Use **Selected Entry Point / Group** to choose what to inspect.
+Use **Selected Entry Point / Group** to choose what to inspect. The default selected flow is ranked for likely usefulness instead of simple alphabetical order.
 
 The selector includes:
 

@@ -152,7 +152,7 @@ uv run --project packages/analyzer avt analyze /path/to/project \
 
 ### Generate Phase 2 Guide suggestions
 
-The first Phase 2 slice writes a safe, provider-neutral Guide file. It contains source-free project summary metadata, an `llm_prompt` built from that metadata, a provider name, and deterministic baseline suggestions from the built-in `static` provider. Future LLM providers can use the same contract.
+The first Phase 2 slice writes a safe, provider-neutral Guide file. It contains source-free project summary metadata, an `llm_prompt` built from that metadata, a provider name, and deterministic baseline suggestions from the built-in `static` provider. The static provider ranks likely-useful flows first (framework hooks, auth/session flows, non-CRUD routes, mutating routes, and richer flows). Future LLM providers can use the same contract.
 
 ```sh
 uv run --project packages/analyzer avt guide-entrypoints /path/to/project --out /tmp/avt-guide.json

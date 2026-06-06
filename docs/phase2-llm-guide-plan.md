@@ -103,6 +103,7 @@ Implemented first foundation slice:
 - validation for required suggestion fields (`entry`, `kind`, `confidence`, `reason`, `risk`)
 - invalid suggestions emitted as warnings
 - already-discovered suggestions skipped to avoid duplicate flows
+- deterministic static usefulness ranking for framework hooks, auth/session flows, non-CRUD routes, mutating routes, and richer flows
 
 RealtorCareersAPI baseline:
 

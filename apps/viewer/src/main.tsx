@@ -435,6 +435,24 @@ function Inspector({ selection }: { selection: InspectorSelection }) {
   );
 }
 
+function entryImportanceScore(graph: ExecutionFlowGraph, entry: EntryPoint): number {
+  const flow = graph.flows.find((item) => item.entry_point_id === entry.id);
+  const label = entry.label.toLowerCase();
+  const route = (entry.route_path ?? '').toLowerCase();
+  const methods = new Set(entry.http_methods ?? []);
+  let score = flow ? Math.min(flow.edge_ids.length, 30) : 0;
+
+  if (entry.kind === 'framework_hook') score += 100;
+  else if (entry.kind === 'web_route') score += 60;
+  else if (entry.kind === 'cli_command') score += 45;
+  else if (entry.kind === 'script') score += 35;
+
+  if (['auth', 'login', 'token', 'user', 'session', 'current_user'].some((token) => label.includes(token) || route.includes(token))) score += 35;
+  if (['seed', 'toggle', 'search', 'publish', 'callback'].some((token) => label.includes(token) || route.includes(token))) score += 25;
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].some((method) => methods.has(method))) score += 15;
+  return score;
+}
+
 function buildEntryRefIndex(graph: ExecutionFlowGraph): Map<string, EntryPoint> {
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const index = new Map<string, EntryPoint>();
@@ -447,17 +465,19 @@ function buildEntryRefIndex(graph: ExecutionFlowGraph): Map<string, EntryPoint> 
 }
 
 function defaultSelectionId(graph: ExecutionFlowGraph): string {
-  const options = buildSelectionOptions(graph);
-  return options[0]?.id ?? '';
+  const rankedEntry = [...graph.entry_points].sort((a, b) => entryImportanceScore(graph, b) - entryImportanceScore(graph, a) || a.id.localeCompare(b.id))[0];
+  return rankedEntry ? `entry:${rankedEntry.id}` : buildSelectionOptions(graph)[0]?.id ?? '';
 }
 
 function buildSelectionOptions(graph: ExecutionFlowGraph): FlowSelectionOption[] {
-  const entryOptions: FlowSelectionOption[] = graph.entry_points.map((entry) => ({
-    id: `entry:${entry.id}`,
-    label: entry.label,
-    kind: 'entry',
-    entryPointIds: [entry.id],
-  }));
+  const entryOptions: FlowSelectionOption[] = [...graph.entry_points]
+    .sort((a, b) => entryImportanceScore(graph, b) - entryImportanceScore(graph, a) || a.id.localeCompare(b.id))
+    .map((entry) => ({
+      id: `entry:${entry.id}`,
+      label: entry.label,
+      kind: 'entry',
+      entryPointIds: [entry.id],
+    }));
 
   const webRoutes = graph.entry_points.filter((entry) => entry.kind === 'web_route');
   const groupOptions: FlowSelectionOption[] = [];

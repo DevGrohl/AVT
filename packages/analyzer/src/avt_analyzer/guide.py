@@ -228,8 +228,34 @@ def _entry_ref(entry: EntryPointCandidate) -> str:
 
 
 def _rank_entry_points(entries: tuple[EntryPointCandidate, ...]) -> list[EntryPointCandidate]:
-    kind_rank = {"framework_hook": 0, "web_route": 1, "cli_command": 2, "script": 3, "manual": 4}
-    return sorted(entries, key=lambda entry: (kind_rank.get(entry.kind, 9), entry.function.relative_path, entry.function.qualified_name))
+    return sorted(entries, key=lambda entry: (-_entry_importance_score(entry), entry.function.relative_path, entry.function.qualified_name))
+
+
+def _entry_importance_score(entry: EntryPointCandidate) -> int:
+    name = entry.function.qualified_name.lower()
+    path = entry.function.relative_path.lower()
+    route = (entry.route_path or "").lower()
+    methods = set(entry.http_methods)
+    score = 0
+
+    if entry.kind == "framework_hook":
+        score += 100
+    elif entry.kind == "web_route":
+        score += 60
+    elif entry.kind == "cli_command":
+        score += 45
+    elif entry.kind == "script":
+        score += 35
+
+    if any(token in name or token in path or token in route for token in ["auth", "login", "token", "user", "session", "current_user"]):
+        score += 35
+    if any(token in name or token in route for token in ["seed", "toggle", "search", "publish", "callback"]):
+        score += 25
+    if methods & {"POST", "PUT", "PATCH", "DELETE"}:
+        score += 15
+    if route and not any(crud in name for crud in ["get_", "create_", "update_", "delete_"]):
+        score += 10
+    return score
 
 
 def _suggestion_reason(entry: EntryPointCandidate) -> str:
