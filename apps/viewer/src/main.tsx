@@ -1,6 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ReactFlow, Background, Controls, MiniMap, type Edge as FlowEdge, type Node as FlowNode, type XYPosition } from '@xyflow/react';
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  NodeResizer,
+  Handle,
+  Position,
+  type Edge as FlowEdge,
+  type Node as FlowNode,
+  type NodeChange,
+  type NodeProps,
+  type XYPosition,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
 import type { EntryPoint, ExecutionFlow, ExecutionFlowGraph, FlowMarker, GraphEdge, GraphNode, GuideFile } from './graph';
@@ -35,6 +48,31 @@ interface FlowSelectionOption {
 }
 
 type PositionOverrides = Record<string, Record<string, XYPosition>>;
+type SizeOverrides = Record<string, Record<string, { width: number; height: number }>>;
+
+interface EditableNodeData extends Record<string, unknown> {
+  label: string;
+  resizable: boolean;
+}
+
+const nodeTypes = { editable: EditableGraphNode };
+
+function EditableGraphNode({ data, selected }: NodeProps<FlowNode<EditableNodeData>>) {
+  return (
+    <>
+      <NodeResizer
+        isVisible={Boolean(data.resizable && selected)}
+        minWidth={data.resizable ? 180 : undefined}
+        minHeight={data.resizable ? 96 : undefined}
+        lineClassName="nodeResizeLine"
+        handleClassName="nodeResizeHandle"
+      />
+      <Handle type="target" position={Position.Left} className="hiddenHandle" />
+      <div className="editableNodeLabel">{data.label}</div>
+      <Handle type="source" position={Position.Right} className="hiddenHandle" />
+    </>
+  );
+}
 
 function App() {
   const [graph, setGraph] = useState<ExecutionFlowGraph | null>(null);
@@ -43,6 +81,7 @@ function App() {
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
+  const [sizeOverrides, setSizeOverrides] = useState<SizeOverrides>({});
   const [edgeFilters, setEdgeFilters] = useState<EdgeFilters>({ showConfirmed: true, showUncertain: true, showRejected: false });
   const [diagramLayout, setDiagramLayout] = useState<DiagramLayout>('hierarchy-swimlane');
   const [displayOptions, setDisplayOptions] = useState<DiagramDisplayOptions>({
@@ -84,10 +123,16 @@ function App() {
 
   const editKey = selectedFlow ? layoutEditKey(selectedFlow.id, diagramLayout, displayOptions) : '';
   const currentOverrides = editKey ? positionOverrides[editKey] ?? {} : {};
-  const editedNodeCount = Object.keys(currentOverrides).length;
+  const currentSizeOverrides = editKey ? sizeOverrides[editKey] ?? {} : {};
+  const editedNodeCount = new Set([...Object.keys(currentOverrides), ...Object.keys(currentSizeOverrides)]).size;
   const displayedReactFlowNodes = useMemo(
-    () => flowModel.reactFlowNodes.map((node) => currentOverrides[node.id] ? { ...node, position: currentOverrides[node.id] } : node),
-    [flowModel.reactFlowNodes, currentOverrides],
+    () => flowModel.reactFlowNodes.map((node) => {
+      const nextNode = currentOverrides[node.id] ? { ...node, position: currentOverrides[node.id] } : { ...node };
+      const size = currentSizeOverrides[node.id];
+      if (!size) return nextNode;
+      return { ...nextNode, style: { ...nextNode.style, width: size.width, height: size.height } };
+    }),
+    [flowModel.reactFlowNodes, currentOverrides, currentSizeOverrides],
   );
 
   async function handleGuideSelected(event: React.ChangeEvent<HTMLInputElement>) {
@@ -110,6 +155,7 @@ function App() {
       const nextGraph = await parseGraph(await file.text());
       setGraph(nextGraph);
       setPositionOverrides({});
+      setSizeOverrides({});
       setSelectedSelectionId(defaultSelectionId(nextGraph));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -189,6 +235,11 @@ function App() {
                       delete next[editKey];
                       return next;
                     });
+                    setSizeOverrides((previous) => {
+                      const next = { ...previous };
+                      delete next[editKey];
+                      return next;
+                    });
                   }}
                 />
                 <div className="graphCanvas" aria-label="Selected Execution Flow graph">
@@ -196,6 +247,7 @@ function App() {
                     key={`${selectedFlow.id}:${diagramLayout}:${displayOptions.showHierarchyContext}:${displayOptions.showExternalInteractions}:${displayOptions.edgeLabelMode}`}
                     nodes={displayedReactFlowNodes}
                     edges={flowModel.reactFlowEdges}
+                    nodeTypes={nodeTypes}
                     fitView
                     fitViewOptions={{ padding: 0.18 }}
                     onNodeClick={(_: React.MouseEvent, node: FlowNode) => {
@@ -211,6 +263,18 @@ function App() {
                           [String(node.id)]: node.position,
                         },
                       }));
+                    }}
+                    onNodesChange={(changes: NodeChange[]) => {
+                      if (!editKey) return;
+                      const sizeChanges = changes.filter((change) => change.type === 'dimensions' && change.dimensions);
+                      if (!sizeChanges.length) return;
+                      setSizeOverrides((previous) => {
+                        const nextForLayout = { ...(previous[editKey] ?? {}) };
+                        for (const change of sizeChanges) {
+                          if (change.type === 'dimensions' && change.dimensions) nextForLayout[change.id] = change.dimensions;
+                        }
+                        return { ...previous, [editKey]: nextForLayout };
+                      });
                     }}
                     onEdgeClick={(_: React.MouseEvent, edge: FlowEdge) => {
                       const graphEdge = flowModel.edgeById.get(String(edge.id));
@@ -691,8 +755,9 @@ function buildFlowModel(
       extent: parentId ? 'parent' : undefined,
       data: {
         label: `${node.kind}: ${node.label}${markersByNodeId.has(node.id) ? ` • ${markersByNodeId.get(node.id)?.length} marker(s)` : ''}`,
+        resizable: node.kind === 'module' || node.kind === 'class',
       },
-      type: 'default',
+      type: 'editable',
       style: nodeStyle(node, layoutModel.sizes.get(node.id)),
       zIndex: node.kind === 'module' ? 0 : node.kind === 'class' ? 1 : 2,
     };
