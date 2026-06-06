@@ -207,6 +207,7 @@ npm run build
 
 - `CONTEXT.md` — project language/glossary.
 - `docs/restart-plan.md` — Phase 1 restart plan.
+- `docs/v1-onboarding-demo.md` — v1 onboarding workflow and acceptance criteria.
 - `docs/phase2-llm-guide-plan.md` — Phase 2 LLM Guide plan.
 - `docs/layout-overlay.md` — viewer layout overlay schema.
 - `docs/future-lsp-multilanguage-plan.md` — future LSP-assisted multi-language architecture plan.
