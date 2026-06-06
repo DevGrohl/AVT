@@ -101,7 +101,7 @@ V1 is accepted when all criteria are true.
 - [ ] README quickstart explains the v1 workflow.
 - [ ] V1 demo commands are copy/paste runnable from the AVT repo root.
 - [ ] Supported frameworks and limitations are clear.
-- [ ] Overlay round-trip is documented.
+- [x] Overlay round-trip is documented in `docs/analysis-overlay.md`.
 - [ ] Future multi-language/LSP plan is linked but not presented as v1 functionality.
 
 ### Usefulness criteria
