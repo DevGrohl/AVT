@@ -8,6 +8,9 @@ suggestions before they can influence graph construction.
 from __future__ import annotations
 
 import json
+import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol, TypedDict
@@ -49,6 +52,49 @@ class StaticGuideProvider:
 
     def suggest_entry_points(self, *, project_name: str, discovery: DiscoveryResult, safe_summary: dict[str, object]) -> GuideOutput:
         return build_static_guide_output(project_name=project_name, discovery=discovery)
+
+
+class OpenAICompatibleGuideProvider:
+    """Minimal OpenAI-compatible chat-completions Guide provider."""
+
+    name = "openai-compatible"
+
+    def __init__(self, *, api_key: str, model: str, api_url: str) -> None:
+        self.api_key = api_key
+        self.model = model
+        self.api_url = api_url
+
+    def suggest_entry_points(self, *, project_name: str, discovery: DiscoveryResult, safe_summary: dict[str, object]) -> GuideOutput:
+        prompt = build_guide_prompt(safe_summary)
+        request_body = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": "You are AVT's LLM Guide. Return strict JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
+        }
+        request = urllib.request.Request(
+            self.api_url,
+            data=json.dumps(request_body).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Guide provider request failed: {exc}") from exc
+
+        content = response_payload.get("choices", [{}])[0].get("message", {}).get("content")
+        if not isinstance(content, str):
+            raise RuntimeError("Guide provider response missing choices[0].message.content")
+        try:
+            guide_output = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Guide provider returned non-JSON content: {exc}") from exc
+        return normalize_guide_output(guide_output)
 
 
 @dataclass(frozen=True)
@@ -114,6 +160,21 @@ def build_static_guide_output(*, project_name: str, discovery: DiscoveryResult) 
     }
 
 
+def make_guide_provider(*, provider_name: str, model: str | None = None, api_url: str | None = None, api_key: str | None = None) -> GuideProvider:
+    if provider_name == "static":
+        return StaticGuideProvider()
+    if provider_name == "openai-compatible":
+        resolved_key = api_key or os.environ.get("AVT_GUIDE_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if not resolved_key:
+            raise ValueError("openai-compatible Guide provider requires AVT_GUIDE_API_KEY or OPENAI_API_KEY")
+        resolved_model = model or os.environ.get("AVT_GUIDE_MODEL") or "gpt-4o-mini"
+        base_url = api_url or os.environ.get("AVT_GUIDE_API_URL") or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1/chat/completions"
+        if base_url.rstrip("/").endswith("/v1"):
+            base_url = f"{base_url.rstrip('/')}/chat/completions"
+        return OpenAICompatibleGuideProvider(api_key=resolved_key, model=resolved_model, api_url=base_url)
+    raise ValueError(f"Unknown Guide provider: {provider_name}")
+
+
 def write_guide_file(path: Path, *, project_name: str, discovery: DiscoveryResult, provider: GuideProvider | None = None) -> None:
     safe_summary = build_safe_project_summary(project_name=project_name, discovery=discovery)
     guide_provider = provider or StaticGuideProvider()
@@ -145,6 +206,19 @@ def build_guide_prompt(safe_summary: dict[str, object]) -> str:
             json.dumps(safe_summary, indent=2, sort_keys=True),
         ]
     )
+
+
+def normalize_guide_output(value: object) -> GuideOutput:
+    if not isinstance(value, dict):
+        raise RuntimeError("Guide provider returned a non-object JSON value")
+    suggestions = value.get("suggested_entry_points")
+    observations = value.get("project_observations")
+    if not isinstance(suggestions, list) or not isinstance(observations, list):
+        raise RuntimeError("Guide provider JSON must include suggested_entry_points and project_observations lists")
+    return {
+        "suggested_entry_points": suggestions,  # validated later by load_guide_entries/analyze
+        "project_observations": [item for item in observations if isinstance(item, str)],
+    }
 
 
 def load_guide_entries(path: Path, discovery: DiscoveryResult) -> GuideValidationResult:

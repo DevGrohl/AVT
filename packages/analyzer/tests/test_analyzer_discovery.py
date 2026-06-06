@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import textwrap
@@ -288,6 +289,25 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertIn("SAFE PROJECT METADATA JSON", guide["llm_prompt"])
         self.assertEqual(guide["suggested_entry_points"][0]["entry"], "app.py:list_items")
         self.assertIn("functions", guide["safe_project_summary"])
+
+    def test_cli_guide_openai_compatible_requires_api_key(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+            (root / "app.py").write_text("def main():\n    pass\n", encoding="utf-8")
+
+            env = dict(os.environ)
+            env.pop("AVT_GUIDE_API_KEY", None)
+            env.pop("OPENAI_API_KEY", None)
+            result = subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "guide-entrypoints", str(root), "--provider", "openai-compatible", "--out", str(Path(temp) / "guide.json")],
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("requires AVT_GUIDE_API_KEY or OPENAI_API_KEY", result.stderr)
 
     def test_cli_analyze_validates_guide_suggestions(self) -> None:
         with TemporaryDirectory() as temp:

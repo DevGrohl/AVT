@@ -90,6 +90,18 @@ avt analyze /path/to/project --with-guide --out /tmp/avt-graph.json
 6. Show Guide suggestions and reasons in the viewer. ✅ guide JSON side panel
 7. Validate on RealtorCareersAPI and compare against static discovery. ✅ initial static baseline
 
+## Phase 2 Slice 2 Status
+
+Implemented provider adapter foundation:
+
+- `GuideProvider` protocol
+- `StaticGuideProvider` fallback
+- `OpenAICompatibleGuideProvider` using chat completions without new dependencies
+- CLI provider options: `--provider`, `--model`, `--api-url`
+- environment support: `AVT_GUIDE_API_KEY`, `OPENAI_API_KEY`, `AVT_GUIDE_MODEL`, `AVT_GUIDE_API_URL`, `OPENAI_BASE_URL`
+
+Provider output still goes through the same validation path before it can affect analysis.
+
 ## Phase 2 Slice 1 Status
 
 Implemented first foundation slice:

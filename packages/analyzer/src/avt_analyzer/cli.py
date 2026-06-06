@@ -10,7 +10,7 @@ from pathlib import Path
 from avt_analyzer import __version__
 from avt_analyzer.entrypoints import discover_entry_points
 from avt_analyzer.graph import build_discovery_graph
-from avt_analyzer.guide import load_guide_entries, write_guide_file
+from avt_analyzer.guide import load_guide_entries, make_guide_provider, write_guide_file
 from avt_analyzer.overlay import apply_overlay, load_overlay
 from avt_analyzer.safety import scan_safety
 from avt_analyzer.scanner import scan_python_project
@@ -38,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     guide.add_argument("path", type=Path, nargs="?", help="Project directory to summarize")
     guide.add_argument("--input", type=Path, help="Absolute project directory to summarize; alternative to positional path")
     guide.add_argument("--out", type=Path, required=True, help="Output Guide suggestions JSON path")
+    guide.add_argument("--provider", choices=["static", "openai-compatible"], default="static", help="Guide provider to use")
+    guide.add_argument("--model", help="Guide model name for provider-backed suggestions")
+    guide.add_argument("--api-url", help="OpenAI-compatible chat completions URL or base /v1 URL")
     guide.add_argument("--include-tests", action="store_true", help="Include tests in scanning")
     guide.set_defaults(func=guide_entrypoints_command)
 
@@ -130,10 +133,16 @@ def guide_entrypoints_command(args: argparse.Namespace) -> int:
 
     scan = scan_python_project(project_path, include_tests=args.include_tests)
     discovery = discover_entry_points(scan)
-    write_guide_file(args.out, project_name=project_path.name, discovery=discovery)
+    try:
+        provider = make_guide_provider(provider_name=args.provider, model=args.model, api_url=args.api_url)
+        write_guide_file(args.out, project_name=project_path.name, discovery=discovery, provider=provider)
+    except (RuntimeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     print(f"Files scanned: {len(scan.files)}")
     print(f"Entry Points found: {len(discovery.entry_points)}")
+    print(f"Guide provider: {args.provider}")
     print(f"Guide suggestions written: {args.out}")
     return 0
 

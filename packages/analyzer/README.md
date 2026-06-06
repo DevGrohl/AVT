@@ -158,6 +158,16 @@ The first Phase 2 slice writes a safe, provider-neutral Guide file. It contains 
 uv run --project packages/analyzer avt guide-entrypoints /path/to/project --out /tmp/avt-guide.json
 ```
 
+Use an OpenAI-compatible provider when configured:
+
+```sh
+export AVT_GUIDE_API_KEY=...
+uv run --project packages/analyzer avt guide-entrypoints /path/to/project \
+  --provider openai-compatible \
+  --model gpt-4o-mini \
+  --out /tmp/avt-guide.json
+```
+
 Apply validated Guide suggestions during analysis:
 
 ```sh
@@ -166,7 +176,7 @@ uv run --project packages/analyzer avt analyze /path/to/project \
   --out graph.json
 ```
 
-Guide suggestions are validated for required fields and against scanned symbols. Invalid suggestions become warnings. Suggestions already discovered by static analysis are not duplicated.
+Guide suggestions are validated for required fields and against scanned symbols. Invalid suggestions become warnings. Suggestions already discovered by static analysis are not duplicated. `openai-compatible` uses `AVT_GUIDE_API_KEY` or `OPENAI_API_KEY`; optional provider settings are `AVT_GUIDE_MODEL`, `AVT_GUIDE_API_URL`, and `OPENAI_BASE_URL`.
 
 ### Include tests
 
