@@ -35,6 +35,11 @@ interface FlowSelectionOption {
 }
 
 type PositionOverrides = Record<string, Record<string, XYPosition>>;
+type EdgeResolutions = Record<string, 'confirmed' | 'rejected'>;
+
+interface AnalysisOverlayFile {
+  edge_resolutions: Array<{ edge_id: string; certainty: 'confirmed' | 'rejected' }>;
+}
 
 interface LayoutOverlayFile {
   kind: 'avt-layout-overlay';
@@ -51,6 +56,7 @@ function App() {
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
+  const [edgeResolutions, setEdgeResolutions] = useState<EdgeResolutions>({});
   const [edgeFilters, setEdgeFilters] = useState<EdgeFilters>({ showConfirmed: true, showUncertain: true, showRejected: false });
   const [diagramLayout, setDiagramLayout] = useState<DiagramLayout>('hierarchy-swimlane');
   const [displayOptions, setDisplayOptions] = useState<DiagramDisplayOptions>({
@@ -87,8 +93,8 @@ function App() {
 
   const flowModel = useMemo(() => {
     if (!graph || !selectedFlow) return emptyFlowModel();
-    return buildFlowModel(graph, selectedFlow, edgeFilters, diagramLayout, displayOptions);
-  }, [graph, selectedFlow, edgeFilters, diagramLayout, displayOptions]);
+    return buildFlowModel(graph, selectedFlow, edgeFilters, diagramLayout, displayOptions, edgeResolutions);
+  }, [graph, selectedFlow, edgeFilters, diagramLayout, displayOptions, edgeResolutions]);
 
   const editKey = selectedFlow ? layoutEditKey(selectedFlow.id, diagramLayout, displayOptions) : '';
   const currentOverrides = editKey ? positionOverrides[editKey] ?? {} : {};
@@ -115,6 +121,22 @@ function App() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
+  }
+
+  function handleExportAnalysisOverlay() {
+    const overlay: AnalysisOverlayFile = {
+      edge_resolutions: Object.entries(edgeResolutions).map(([edge_id, certainty]) => ({ edge_id, certainty })),
+    };
+    const blob = new Blob([`${JSON.stringify(overlay, null, 2)}\n`], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${graph?.metadata.project_name || 'avt'}-analysis-overlay.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice('Analysis overlay exported.');
   }
 
   function handleExportLayout() {
@@ -157,6 +179,7 @@ function App() {
       const nextGraph = await parseGraph(await file.text());
       setGraph(nextGraph);
       setPositionOverrides({});
+      setEdgeResolutions({});
       setNotice(null);
       setSelectedSelectionId(defaultSelectionId(nextGraph));
     } catch (reason) {
@@ -214,6 +237,7 @@ function App() {
             <LayoutOverlayControls editedViewCount={Object.keys(positionOverrides).length} onExport={handleExportLayout} />
             <DiagramDisplayControls options={displayOptions} onChange={setDisplayOptions} />
             <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
+            <AnalysisOverlayControls resolutionCount={Object.keys(edgeResolutions).length} onExport={handleExportAnalysisOverlay} />
             <GuideSummary
               guide={guide}
               graph={graph}
@@ -223,7 +247,21 @@ function App() {
                 setSelection(null);
               }}
             />
-            <Inspector selection={selection} />
+            <Inspector
+              selection={selection}
+              onResolveEdge={(edge, certainty) => {
+                setEdgeResolutions((previous) => ({ ...previous, [edge.id]: certainty }));
+                setNotice(`Marked selected edge as ${certainty} in the in-memory Analysis Overlay.`);
+              }}
+              onClearEdgeResolution={(edge) => {
+                setEdgeResolutions((previous) => {
+                  const next = { ...previous };
+                  delete next[edge.id];
+                  return next;
+                });
+                setNotice('Cleared selected edge overlay resolution.');
+              }}
+            />
           </aside>
 
           <section className="panel flowPanel">
@@ -461,6 +499,17 @@ function GuideSummary({
   );
 }
 
+function AnalysisOverlayControls({ resolutionCount, onExport }: { resolutionCount: number; onExport: () => void }) {
+  return (
+    <section className="summaryBlock">
+      <h3>Analysis Overlay</h3>
+      <p className="hint">Confirm/reject uncertain edges from the edge inspector, then export `.avt/overlay.json`.</p>
+      <button className="linkButton" type="button" onClick={onExport} disabled={!resolutionCount}>Export overlay JSON</button>
+      <p className="hint">{resolutionCount} edge resolution(s) in memory.</p>
+    </section>
+  );
+}
+
 function EdgeFilterControls({ filters, onChange }: { filters: EdgeFilters; onChange: (filters: EdgeFilters) => void }) {
   return (
     <section className="summaryBlock">
@@ -558,7 +607,15 @@ function FlowLists({ nodes, edges, markersByNodeId }: { nodes: GraphNode[]; edge
   );
 }
 
-function Inspector({ selection }: { selection: InspectorSelection }) {
+function Inspector({
+  selection,
+  onResolveEdge,
+  onClearEdgeResolution,
+}: {
+  selection: InspectorSelection;
+  onResolveEdge: (edge: GraphEdge, certainty: 'confirmed' | 'rejected') => void;
+  onClearEdgeResolution: (edge: GraphEdge) => void;
+}) {
   if (!selection) {
     return (
       <section className="summaryBlock inspector">
@@ -596,6 +653,13 @@ function Inspector({ selection }: { selection: InspectorSelection }) {
       <p><strong>{selection.item.kind}</strong></p>
       <p>{selection.item.evidence.reason.label}</p>
       <p>{selection.item.evidence.location.path}:{selection.item.evidence.location.line}</p>
+      {selection.item.certainty === 'uncertain' || selection.item.evidence.reason.code === 'viewer_overlay_resolution' ? (
+        <div className="overlayButtons">
+          <button className="linkButton" type="button" onClick={() => onResolveEdge(selection.item, 'confirmed')}>Confirm edge</button>
+          <button className="linkButton" type="button" onClick={() => onResolveEdge(selection.item, 'rejected')}>Reject edge</button>
+          <button className="linkButton" type="button" onClick={() => onClearEdgeResolution(selection.item)}>Clear</button>
+        </div>
+      ) : <p className="hint">Only uncertain edges can be exported as overlay resolutions.</p>}
     </section>
   );
 }
@@ -722,9 +786,10 @@ function buildFlowModel(
   filters: EdgeFilters,
   layout: DiagramLayout,
   displayOptions: DiagramDisplayOptions,
+  edgeResolutions: EdgeResolutions,
 ) {
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
-  const edgeById = new Map(graph.edges.map((edge) => [edge.id, edge]));
+  const edgeById = new Map(graph.edges.map((edge) => [edge.id, applyViewerResolution(edge, edgeResolutions[edge.id])]));
   const markerById = new Map(graph.markers.map((marker) => [marker.id, marker]));
 
   const visibleEdgeIds = new Set(
@@ -800,6 +865,21 @@ function buildFlowModel(
   }));
 
   return { flowNodes, flowEdges, reactFlowNodes, reactFlowEdges, nodeById, edgeById, markersByNodeId };
+}
+
+function applyViewerResolution(edge: GraphEdge, resolution: 'confirmed' | 'rejected' | undefined): GraphEdge {
+  if (!resolution) return edge;
+  return {
+    ...edge,
+    certainty: resolution,
+    evidence: {
+      ...edge.evidence,
+      reason: {
+        code: 'viewer_overlay_resolution',
+        label: `Viewer Analysis Overlay marked edge as ${resolution}`,
+      },
+    },
+  };
 }
 
 function emptyFlowModel() {

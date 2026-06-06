@@ -221,11 +221,16 @@ select {
   line-height: 1.4;
 }
 
+.overlayButtons,
 .guideFilters {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin: 12px 0;
+}
+
+.overlayButtons {
+  grid-template-columns: 1fr;
 }
 
 .guideFilters label {
