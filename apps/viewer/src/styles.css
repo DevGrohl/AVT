@@ -145,29 +145,6 @@ button.linkButton:disabled {
   overflow: auto;
 }
 
-.editableNodeLabel {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-}
-
-.hiddenHandle {
-  opacity: 0;
-}
-
-.nodeResizeLine {
-  border-color: #315efb;
-}
-
-.nodeResizeHandle {
-  width: 10px;
-  height: 10px;
-  border-color: #315efb;
-  background: #ffffff;
-}
-
 .graphCanvas {
   height: min(72vh, 820px);
   min-height: 620px;
