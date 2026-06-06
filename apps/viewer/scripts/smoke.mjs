@@ -5,6 +5,7 @@ import { extname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const root = resolve('dist');
+const graphOverride = process.env.AVT_VIEWER_SMOKE_GRAPH ? resolve(process.env.AVT_VIEWER_SMOKE_GRAPH) : '';
 if (!existsSync(root)) {
   console.error('dist/ not found. Run npm run build first.');
   process.exit(2);
@@ -21,7 +22,7 @@ const mime = new Map([
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://127.0.0.1');
   const requestPath = url.pathname === '/' ? '/index.html' : url.pathname;
-  const filePath = join(root, decodeURIComponent(requestPath));
+  const filePath = graphOverride && requestPath === '/sample-graph.json' ? graphOverride : join(root, decodeURIComponent(requestPath));
   try {
     const body = await readFile(filePath);
     res.writeHead(200, { 'Content-Type': mime.get(extname(filePath)) ?? 'application/octet-stream' });
@@ -47,11 +48,17 @@ try {
     `http://127.0.0.1:${port}/`,
   ]);
 
+  const extraChecks = (process.env.AVT_VIEWER_SMOKE_EXPECT_TEXT ?? '')
+    .split('|')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => [`expected text: ${value}`, value]);
   const checks = [
     ['title', 'Execution Flow Viewer'],
     ['summary', 'visible nodes'],
     ['react-flow node DOM', 'react-flow__node'],
     ['react-flow edge DOM', 'react-flow__edge'],
+    ...extraChecks,
   ];
   const failures = checks.filter(([, needle]) => !dom.includes(needle));
   if (failures.length) {
@@ -60,7 +67,7 @@ try {
   }
   const nodeCount = (dom.match(/react-flow__node/g) ?? []).length;
   const edgeCount = (dom.match(/react-flow__edge/g) ?? []).length;
-  console.log(`Viewer smoke passed: ${nodeCount} node DOM markers, ${edgeCount} edge DOM markers.`);
+  console.log(`Viewer smoke passed: ${nodeCount} node DOM markers, ${edgeCount} edge DOM markers${graphOverride ? ` using ${graphOverride}` : ''}.`);
 } finally {
   server.close();
 }

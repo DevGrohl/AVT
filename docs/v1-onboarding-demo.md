@@ -130,9 +130,13 @@ uv run --project packages/analyzer python -m unittest discover packages/analyzer
 # RealtorCareersAPI graph and sanity checks
 scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
 
-# Viewer smoke
+# Viewer smoke with bundled sample graph
 cd apps/viewer
 npm run smoke
+cd ../..
+
+# Viewer smoke with RealtorCareersAPI v1 graph
+scripts/smoke-v1-realtor-viewer.sh /tmp/avt-realtor-v1.json
 ```
 
 ## Decision

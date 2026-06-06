@@ -46,7 +46,13 @@ Run a headless Chromium smoke test that builds the viewer, serves `dist/`, and a
 npm run smoke
 ```
 
-Set `CHROMIUM_BIN=/path/to/chromium` if Chromium is not on `PATH`.
+Run the same smoke path against the RealtorCareersAPI v1 regression graph from the repository root:
+
+```sh
+scripts/smoke-v1-realtor-viewer.sh /tmp/avt-realtor-v1.json
+```
+
+Set `CHROMIUM_BIN=/path/to/chromium` if Chromium is not on `PATH`. Set `AVT_VIEWER_SMOKE_GRAPH=/path/to/graph.json` to override `/sample-graph.json` during `npm run smoke`.
 
 ## Load a graph
 
