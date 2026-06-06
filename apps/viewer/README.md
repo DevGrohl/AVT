@@ -38,6 +38,16 @@ npm run preview
 
 Build output is written to `dist/`.
 
+## Smoke test
+
+Run a headless Chromium smoke test that builds the viewer, serves `dist/`, and asserts React Flow nodes/edges render:
+
+```sh
+npm run smoke
+```
+
+Set `CHROMIUM_BIN=/path/to/chromium` if Chromium is not on `PATH`.
+
 ## Load a graph
 
 The viewer loads `public/sample-graph.json` by default.
