@@ -98,9 +98,9 @@ V1 is accepted when all criteria are true.
 
 ### Documentation criteria
 
-- [ ] README quickstart explains the v1 workflow.
-- [ ] V1 demo commands are copy/paste runnable from the AVT repo root.
-- [ ] Supported frameworks and limitations are clear.
+- [x] README quickstart explains the v1 workflow.
+- [x] V1 demo commands are copy/paste runnable from the AVT repo root.
+- [x] Supported frameworks and limitations are clear.
 - [x] Overlay round-trip is documented in `docs/analysis-overlay.md`.
 - [x] Future multi-language/LSP plan is linked but not presented as v1 functionality.
 

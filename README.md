@@ -11,17 +11,28 @@ Phase 1 focuses on a local/static workflow:
 
 ## Current status
 
-Implemented Phase 1 baseline:
+AVT is converging on a **v1 onboarding workflow** for unfamiliar Python API/backend repositories:
+
+- Generate a local Execution Flow Graph from a target repo.
+- Open the graph in the static/local viewer.
+- Start from ranked, likely-useful Entry Points.
+- Inspect route/service/database/external interaction paths.
+- Confirm/reject uncertain edges with an Analysis Overlay.
+- Save presentation edits with a Layout Overlay.
+
+Implemented core capabilities:
 
 - Python analyzer CLI (`avt analyze`).
+- FastAPI route discovery, router prefix composition, dependency flows, and framework hooks.
+- Django/DRF route/action discovery for regression coverage.
 - Entry Point discovery and manual Entry Point selection.
 - Static call traversal with certainty annotations.
-- External Interaction detection.
+- External Interaction and likely ORM/database detection.
 - Flow Markers for meaningful static behavior evidence.
-- Analysis Overlay loading for confirming/rejecting Uncertain Edges.
+- Analysis Overlay loading/export workflow for confirming/rejecting Uncertain Edges.
 - Output-safety warnings for secret-looking literals and environment variable references.
-- React Flow static/local viewer.
-- End-to-end validation on this repository.
+- React Flow static/local viewer with v1 stable swimlane layout.
+- Headless browser smoke tests, including a RealtorCareersAPI v1 graph smoke path.
 
 ## Monorepo layout
 
@@ -34,12 +45,34 @@ spikes/visualization-libraries/ Visualization library comparison spike
 
 ## Quickstart
 
-### 1. Generate a graph
+### V1 demo: RealtorCareersAPI
+
+The primary realistic validation target is `/mnt/shared/Documents/Projects/RealtorCareersAPI`.
+
+From the AVT repository root:
+
+```sh
+scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
+cd apps/viewer
+npm install
+npm run dev
+```
+
+Open the printed local URL and use **Load graph JSON** to select `/tmp/avt-realtor-v1.json`.
+
+If RealtorCareersAPI is elsewhere:
+
+```sh
+AVT_REALTOR_TARGET=/absolute/path/to/RealtorCareersAPI \
+  scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
+```
+
+### Analyze any local Python project
 
 From the repository root:
 
 ```sh
-uv run --project packages/analyzer avt analyze . --no-timestamp --out /tmp/avt-graph.json
+uv run --project packages/analyzer avt analyze /path/to/project --no-timestamp --out /tmp/avt-graph.json
 python -m json.tool /tmp/avt-graph.json >/dev/null
 ```
 
@@ -84,6 +117,26 @@ cd apps/viewer
 npm run build
 npm run preview
 ```
+
+## V1 support and limitations
+
+V1 is designed for local/static onboarding of Python backend/API projects.
+
+Supported well enough for v1:
+
+- FastAPI routes, router prefixes, dependencies, and framework hooks;
+- Django REST Framework `@api_view` / `@action` discovery for regression coverage;
+- route/service/helper call paths where static resolution is possible;
+- likely ORM/database and external interactions;
+- uncertainty and human correction through Analysis Overlay.
+
+Known limitations:
+
+- whole-program call graphs are approximate;
+- dynamic dispatch, dependency injection, and framework magic may produce uncertain or missing edges;
+- likely ORM/external heuristics can be noisy and should be corrected with overlays when needed;
+- broad multi-language support is future work, documented in `docs/future-lsp-multilanguage-plan.md`;
+- target projects are read-only inputs: AVT does not modify source repositories during analysis.
 
 ## Analyzer CLI
 
@@ -204,6 +257,13 @@ Viewer:
 cd apps/viewer
 npm install
 npm run build
+npm run smoke
+```
+
+Full v1 browser smoke with RealtorCareersAPI graph:
+
+```sh
+scripts/smoke-v1-realtor-viewer.sh /tmp/avt-realtor-v1.json
 ```
 
 ## Documentation
