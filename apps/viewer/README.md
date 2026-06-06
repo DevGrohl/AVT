@@ -94,7 +94,7 @@ The left panel shows:
 
 ### Entry Point / Group selector
 
-Use **Selected Entry Point / Group** to choose what to inspect. The default selected flow is ranked for likely usefulness instead of simple alphabetical order.
+Use **Selected Entry Point / Group** to choose what to inspect. The default selected flow is ranked for likely usefulness instead of simple alphabetical order. Entry options show rank/score, and the selected flow header explains the score reasons. Seed/setup flows and empty framework hooks are de-emphasized so product/auth/domain routes are better v1 defaults.
 
 The selector includes:
 

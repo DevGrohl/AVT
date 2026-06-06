@@ -214,11 +214,17 @@ select {
   margin: 8px 0;
 }
 
-.hint {
+.hint,
+.rankReason {
   margin: 8px 0 0;
   color: #65708a;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.rankReason {
+  color: #33415c;
+  font-weight: 700;
 }
 
 .overlayButtons,

@@ -91,6 +91,11 @@ function App() {
     return graph.entry_points.find((entry) => entry.id === selectedOption.entryPointIds[0]) ?? null;
   }, [graph, selectedOption]);
 
+  const selectedImportance = useMemo(() => {
+    if (!graph || !selectedEntryPoint) return null;
+    return entryImportance(graph, selectedEntryPoint);
+  }, [graph, selectedEntryPoint]);
+
   const flowModel = useMemo(() => {
     if (!graph || !selectedFlow) return emptyFlowModel();
     return buildFlowModel(graph, selectedFlow, edgeFilters, diagramLayout, displayOptions, edgeResolutions);
@@ -274,6 +279,7 @@ function App() {
                   edgeCount={flowModel.flowEdges.length}
                   layout={diagramLayout}
                   editedNodeCount={editedNodeCount}
+                  importance={selectedImportance}
                   onResetLayout={() => {
                     if (!editKey) return;
                     setPositionOverrides((previous) => {
@@ -532,6 +538,7 @@ function FlowHeader({
   edgeCount,
   layout,
   editedNodeCount,
+  importance,
   onResetLayout,
 }: {
   flow: ExecutionFlow;
@@ -540,6 +547,7 @@ function FlowHeader({
   edgeCount: number;
   layout: DiagramLayout;
   editedNodeCount: number;
+  importance: EntryImportance | null;
   onResetLayout: () => void;
 }) {
   return (
@@ -548,6 +556,7 @@ function FlowHeader({
         <p className="eyebrow">Selected Execution Flow</p>
         <h2>{label}</h2>
         <p className="hint">{layoutDescription(layout)}</p>
+        {importance ? <p className="rankReason">Rank score {importance.score}: {importance.reasons.join('; ')}</p> : null}
       </div>
       <div className="counts">
         <span>{nodeCount} visible nodes</span>
@@ -664,22 +673,59 @@ function Inspector({
   );
 }
 
-function entryImportanceScore(graph: ExecutionFlowGraph, entry: EntryPoint): number {
+interface EntryImportance {
+  score: number;
+  reasons: string[];
+}
+
+function entryImportance(graph: ExecutionFlowGraph, entry: EntryPoint): EntryImportance {
   const flow = graph.flows.find((item) => item.entry_point_id === entry.id);
   const label = entry.label.toLowerCase();
   const route = (entry.route_path ?? '').toLowerCase();
   const methods = new Set(entry.http_methods ?? []);
-  let score = flow ? Math.min(flow.edge_ids.length, 30) : 0;
+  const edgeCount = flow?.edge_ids.length ?? 0;
+  const markerCount = flow?.marker_ids.length ?? 0;
+  let score = Math.min(edgeCount, 30);
+  const reasons: string[] = [];
 
-  if (entry.kind === 'framework_hook') score += 100;
-  else if (entry.kind === 'web_route') score += 60;
-  else if (entry.kind === 'cli_command') score += 45;
-  else if (entry.kind === 'script') score += 35;
+  if (edgeCount) reasons.push(`${edgeCount} edge(s)`);
+  if (markerCount) reasons.push(`${markerCount} marker(s)`);
 
-  if (['auth', 'login', 'token', 'user', 'session', 'current_user'].some((token) => label.includes(token) || route.includes(token))) score += 35;
-  if (['seed', 'toggle', 'search', 'publish', 'callback'].some((token) => label.includes(token) || route.includes(token))) score += 25;
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].some((method) => methods.has(method))) score += 15;
-  return score;
+  if (entry.kind === 'framework_hook') {
+    score += edgeCount ? 70 : 20;
+    reasons.push(edgeCount ? 'framework hook with behavior' : 'framework hook');
+  } else if (entry.kind === 'web_route') {
+    score += 60;
+    reasons.push('web route');
+  } else if (entry.kind === 'cli_command') {
+    score += 45;
+    reasons.push('CLI command');
+  } else if (entry.kind === 'script') {
+    score += 35;
+    reasons.push('script entry');
+  }
+
+  if (['auth', 'login', 'token', 'user', 'session', 'current_user'].some((token) => label.includes(token) || route.includes(token))) {
+    score += 35;
+    reasons.push('auth/user/session signal');
+  }
+  if (['toggle', 'search', 'publish', 'callback'].some((token) => label.includes(token) || route.includes(token))) {
+    score += 25;
+    reasons.push('domain action signal');
+  }
+  if (['seed', 'seeder'].some((token) => label.includes(token) || route.includes(token))) {
+    score -= 20;
+    reasons.push('seed/setup flow de-emphasized');
+  }
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].some((method) => methods.has(method))) {
+    score += 15;
+    reasons.push('mutating route');
+  }
+  return { score, reasons: reasons.length ? reasons : ['baseline ordering'] };
+}
+
+function entryImportanceScore(graph: ExecutionFlowGraph, entry: EntryPoint): number {
+  return entryImportance(graph, entry).score;
 }
 
 function buildEntryRefIndex(graph: ExecutionFlowGraph): Map<string, EntryPoint> {
@@ -701,12 +747,15 @@ function defaultSelectionId(graph: ExecutionFlowGraph): string {
 function buildSelectionOptions(graph: ExecutionFlowGraph): FlowSelectionOption[] {
   const entryOptions: FlowSelectionOption[] = [...graph.entry_points]
     .sort((a, b) => entryImportanceScore(graph, b) - entryImportanceScore(graph, a) || a.id.localeCompare(b.id))
-    .map((entry) => ({
-      id: `entry:${entry.id}`,
-      label: entry.label,
-      kind: 'entry',
-      entryPointIds: [entry.id],
-    }));
+    .map((entry, index) => {
+      const importance = entryImportance(graph, entry);
+      return {
+        id: `entry:${entry.id}`,
+        label: `#${index + 1} (${importance.score}) ${entry.label}`,
+        kind: 'entry',
+        entryPointIds: [entry.id],
+      };
+    });
 
   const webRoutes = graph.entry_points.filter((entry) => entry.kind === 'web_route');
   const groupOptions: FlowSelectionOption[] = [];
