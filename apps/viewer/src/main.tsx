@@ -163,12 +163,14 @@ function App() {
           <section className="panel flowPanel">
             {selectedFlow ? (
               <>
-                <FlowHeader flow={selectedFlow} label={selectedOption?.label ?? selectedFlow.id} nodeCount={flowModel.flowNodes.length} edgeCount={flowModel.flowEdges.length} />
+                <FlowHeader flow={selectedFlow} label={selectedOption?.label ?? selectedFlow.id} nodeCount={flowModel.flowNodes.length} edgeCount={flowModel.flowEdges.length} layout={diagramLayout} />
                 <div className="graphCanvas" aria-label="Selected Execution Flow graph">
                   <ReactFlow
+                    key={`${selectedFlow.id}:${diagramLayout}:${displayOptions.showHierarchyContext}:${displayOptions.showExternalInteractions}:${displayOptions.edgeLabelMode}`}
                     nodes={flowModel.reactFlowNodes}
                     edges={flowModel.reactFlowEdges}
                     fitView
+                    fitViewOptions={{ padding: 0.18 }}
                     onNodeClick={(_: React.MouseEvent, node: FlowNode) => {
                       const graphNode = flowModel.nodeById.get(String(node.id));
                       if (graphNode) setSelection({ type: 'node', item: graphNode, markers: flowModel.markersByNodeId.get(graphNode.id) ?? [] });
@@ -339,12 +341,13 @@ function EdgeFilterControls({ filters, onChange }: { filters: EdgeFilters; onCha
   );
 }
 
-function FlowHeader({ flow, label, nodeCount, edgeCount }: { flow: ExecutionFlow; label: string; nodeCount: number; edgeCount: number }) {
+function FlowHeader({ flow, label, nodeCount, edgeCount, layout }: { flow: ExecutionFlow; label: string; nodeCount: number; edgeCount: number; layout: DiagramLayout }) {
   return (
     <div className="flowHeader">
       <div>
         <p className="eyebrow">Selected Execution Flow</p>
         <h2>{label}</h2>
+        <p className="hint">{layoutDescription(layout)}</p>
       </div>
       <div className="counts">
         <span>{nodeCount} visible nodes</span>
@@ -353,6 +356,13 @@ function FlowHeader({ flow, label, nodeCount, edgeCount }: { flow: ExecutionFlow
       </div>
     </div>
   );
+}
+
+function layoutDescription(layout: DiagramLayout): string {
+  if (layout === 'layered') return 'Layered flow: call-flow columns with structural context areas when enabled.';
+  if (layout === 'hierarchy') return 'Hierarchy: module/class areas own their functions and methods.';
+  if (layout === 'circular') return 'Circular: relationship overview for spotting clusters and cycles.';
+  return 'Compact grid: dense scan-friendly layout.';
 }
 
 function FlowLists({ nodes, edges, markersByNodeId }: { nodes: GraphNode[]; edges: GraphEdge[]; markersByNodeId: Map<string, FlowMarker[]> }) {
@@ -748,7 +758,28 @@ function areaLayout(
     });
   }
 
+  avoidTopLevelContainerOverlap(nodes, parentIds, positions, sizes);
+
   return { positions, parentIds, sizes };
+}
+
+function avoidTopLevelContainerOverlap(
+  nodes: GraphNode[],
+  parentIds: Map<string, string>,
+  positions: Map<string, { x: number; y: number }>,
+  sizes: Map<string, { width: number; height: number }>,
+): void {
+  const containers = nodes
+    .filter((node) => (node.kind === 'module' || node.kind === 'class') && !parentIds.has(node.id))
+    .sort((a, b) => (positions.get(a.id)?.y ?? 0) - (positions.get(b.id)?.y ?? 0) || a.id.localeCompare(b.id));
+  let cursorY = Number.NEGATIVE_INFINITY;
+  for (const container of containers) {
+    const position = positions.get(container.id) ?? { x: 0, y: 0 };
+    const size = sizes.get(container.id) ?? defaultNodeSize(container);
+    const nextY = cursorY === Number.NEGATIVE_INFINITY ? position.y : Math.max(position.y, cursorY + 72);
+    positions.set(container.id, { ...position, y: nextY });
+    cursorY = nextY + size.height;
+  }
 }
 
 function defaultNodeSize(node: GraphNode): { width: number; height: number } {

@@ -141,7 +141,8 @@ button.linkButton {
 }
 
 .graphCanvas {
-  height: 520px;
+  height: min(72vh, 820px);
+  min-height: 620px;
   overflow: hidden;
   margin-bottom: 20px;
   border: 1px solid #dbe2ef;

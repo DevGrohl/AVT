@@ -119,7 +119,7 @@ Hierarchy context is shown by including ancestor module/class nodes for visible 
 
 Use **Diagram layout** to switch how the same selected flow is drawn:
 
-- **Layered flow** — default flow-oriented view. Places roots on the left and reachable calls/interactions in later columns while keeping module/class context as container swimlanes when context is enabled.
+- **Layered flow** — default flow-oriented view. Places roots on the left and reachable calls/interactions in later columns while keeping module/class context as container swimlanes when context is enabled. Layout changes force a fresh fit-to-view.
 - **Hierarchy by module/class** — ownership-oriented view. Renders modules and classes as container areas so owned functions/methods sit inside their structural context.
 - **Circular relationships** — relationship overview for spotting clusters/cycles in dense graphs.
 - **Compact grid** — dense scan-friendly layout when labels/lists matter more than edge geometry.
@@ -129,6 +129,8 @@ Use **Diagram handling** to tune what the diagram shows:
 - show/hide module/class context nodes;
 - show/hide External Interactions;
 - switch edge labels between kind, reason, or none.
+
+The graph canvas is intentionally larger than the text details area because visual exploration is the primary product interaction.
 
 These options are inspired by database diagram tools such as DataGrip: the graph data stays the same, but layout and handling change depending on what the Developer is trying to understand.
 
