@@ -36,10 +36,18 @@ interface FlowSelectionOption {
 
 type PositionOverrides = Record<string, Record<string, XYPosition>>;
 
+interface LayoutOverlayFile {
+  kind: 'avt-layout-overlay';
+  version: 1;
+  project_name?: string;
+  positions: PositionOverrides;
+}
+
 function App() {
   const [graph, setGraph] = useState<ExecutionFlowGraph | null>(null);
   const [guide, setGuide] = useState<GuideFile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
@@ -90,6 +98,40 @@ function App() {
     [flowModel.reactFlowNodes, currentOverrides],
   );
 
+  async function handleLayoutSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const overlay = parseLayoutOverlay(await file.text());
+      setPositionOverrides(overlay.positions);
+      setNotice(`Loaded layout overlay with ${Object.keys(overlay.positions).length} edited view(s).`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  function handleExportLayout() {
+    if (!graph) return;
+    const overlay: LayoutOverlayFile = {
+      kind: 'avt-layout-overlay',
+      version: 1,
+      project_name: graph.metadata.project_name,
+      positions: positionOverrides,
+    };
+    const blob = new Blob([`${JSON.stringify(overlay, null, 2)}\n`], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${graph.metadata.project_name || 'avt'}-layout-overlay.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice('Layout overlay exported.');
+  }
+
   async function handleGuideSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -110,6 +152,7 @@ function App() {
       const nextGraph = await parseGraph(await file.text());
       setGraph(nextGraph);
       setPositionOverrides({});
+      setNotice(null);
       setSelectedSelectionId(defaultSelectionId(nextGraph));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -132,10 +175,15 @@ function App() {
             Load guide JSON
             <input type="file" accept="application/json,.json" onChange={handleGuideSelected} />
           </label>
+          <label className="filePicker secondaryPicker">
+            Load layout JSON
+            <input type="file" accept="application/json,.json" onChange={handleLayoutSelected} />
+          </label>
         </div>
       </header>
 
       {error ? <section className="error">{error}</section> : null}
+      {notice ? <section className="notice">{notice}</section> : null}
       {graph ? (
         <section className="layout">
           <aside className="panel sidebar">
@@ -158,6 +206,7 @@ function App() {
             {selectedOption?.kind === 'group' ? <GroupSummary option={selectedOption} /> : null}
             {selectedEntryPoint ? <EntryPointSummary entryPoint={selectedEntryPoint} /> : null}
             <DiagramLayoutControls layout={diagramLayout} onChange={setDiagramLayout} />
+            <LayoutOverlayControls editedViewCount={Object.keys(positionOverrides).length} onExport={handleExportLayout} />
             <DiagramDisplayControls options={displayOptions} onChange={setDisplayOptions} />
             <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
             <GuideSummary
@@ -291,6 +340,17 @@ function DiagramLayoutControls({ layout, onChange }: { layout: DiagramLayout; on
         <option value="grid">Compact grid</option>
       </select>
       <p className="hint">Switch layouts to inspect dense flows from different angles.</p>
+    </section>
+  );
+}
+
+function LayoutOverlayControls({ editedViewCount, onExport }: { editedViewCount: number; onExport: () => void }) {
+  return (
+    <section className="summaryBlock">
+      <h3>Layout overlay</h3>
+      <p className="hint">Save/load manual node positions separately from graph facts.</p>
+      <button className="linkButton" type="button" onClick={onExport} disabled={!editedViewCount}>Export layout JSON</button>
+      <p className="hint">{editedViewCount} edited view(s) in memory.</p>
     </section>
   );
 }
@@ -1114,6 +1174,16 @@ function parseGuide(text: string): GuideFile {
   const parsed = JSON.parse(text) as unknown;
   if (!isGuideFile(parsed)) throw new Error('Selected file is not an AVT Guide JSON file.');
   return parsed;
+}
+
+function parseLayoutOverlay(text: string): LayoutOverlayFile {
+  const parsed = JSON.parse(text) as unknown;
+  if (!parsed || typeof parsed !== 'object') throw new Error('Selected file is not an AVT layout overlay.');
+  const overlay = parsed as Partial<LayoutOverlayFile>;
+  if (overlay.kind !== 'avt-layout-overlay' || overlay.version !== 1 || !overlay.positions || typeof overlay.positions !== 'object') {
+    throw new Error('Selected file is not an AVT layout overlay.');
+  }
+  return overlay as LayoutOverlayFile;
 }
 
 async function parseGraph(text: string): Promise<ExecutionFlowGraph> {

@@ -73,7 +73,8 @@ h2 {
 
 .filePicker,
 .panel,
-.error {
+.error,
+.notice {
   border: 1px solid #dbe2ef;
   border-radius: 16px;
   background: #ffffff;
@@ -115,12 +116,22 @@ button.linkButton:disabled {
   border-color: #c8d5ff;
 }
 
-.error {
+.error,
+.notice {
   margin-bottom: 16px;
   padding: 16px;
+}
+
+.error {
   color: #7a1f1f;
   background: #fff0f0;
   border-color: #ffd0d0;
+}
+
+.notice {
+  color: #0f5132;
+  background: #effaf3;
+  border-color: #cdebd6;
 }
 
 .layout {
