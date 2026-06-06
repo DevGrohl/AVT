@@ -133,11 +133,16 @@ Visible edge types include:
 
 Hierarchy context is shown by including ancestor module/class nodes for visible flow nodes.
 
-Use **Diagram layout** to switch how the same selected flow is drawn:
+Use **Diagram layout** to switch how the same selected flow is drawn.
 
-- **Nested ownership map** — modules/classes are container areas that own their functions/methods.
+V1 stable layout:
+
 - **Swimlane hierarchy** — each module becomes a horizontal lane; classes/functions sit inside the lane to reduce overlap.
+
+Experimental alternatives remain available for exploration but should not block the default onboarding path:
+
 - **Outline + focused graph** — hierarchy becomes a compact left outline while behavior nodes remain in the main flow graph.
+- **Nested ownership map** — modules/classes are container areas that own their functions/methods.
 - **Layered flow** — flow-oriented view. Places roots on the left and reachable calls/interactions in later columns while keeping module/class context as container swimlanes when context is enabled. Layout changes force a fresh fit-to-view.
 - **Circular relationships** — relationship overview for spotting clusters/cycles in dense graphs.
 - **Compact grid** — dense scan-friendly layout when labels/lists matter more than edge geometry.

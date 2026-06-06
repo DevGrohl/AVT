@@ -381,14 +381,18 @@ function DiagramLayoutControls({ layout, onChange }: { layout: DiagramLayout; on
       <h3>Diagram layout</h3>
       <label className="selectLabel" htmlFor="diagramLayout">Handling</label>
       <select id="diagramLayout" value={layout} onChange={(event) => onChange(event.target.value as DiagramLayout)}>
-        <option value="hierarchy-nested">Nested ownership map</option>
-        <option value="hierarchy-swimlane">Swimlane hierarchy</option>
-        <option value="hierarchy-outline">Outline + focused graph</option>
-        <option value="layered">Layered flow</option>
-        <option value="circular">Circular relationships</option>
-        <option value="grid">Compact grid</option>
+        <optgroup label="V1 stable">
+          <option value="hierarchy-swimlane">Swimlane hierarchy</option>
+        </optgroup>
+        <optgroup label="Experimental alternatives">
+          <option value="hierarchy-outline">Outline + focused graph</option>
+          <option value="hierarchy-nested">Nested ownership map</option>
+          <option value="layered">Layered flow</option>
+          <option value="circular">Circular relationships</option>
+          <option value="grid">Compact grid</option>
+        </optgroup>
       </select>
-      <p className="hint">Switch layouts to inspect dense flows from different angles.</p>
+      <p className="hint">V1 defaults to swimlane hierarchy. Other layouts are exploratory and should not block the standard onboarding path.</p>
     </section>
   );
 }

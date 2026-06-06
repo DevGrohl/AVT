@@ -91,9 +91,9 @@ V1 is accepted when all criteria are true.
 - [ ] Viewer smoke test passes against a realistic graph.
 - [ ] Default selected flow is useful, not arbitrary noise.
 - [ ] Selected flow renders visible React Flow nodes and edges.
-- [ ] Node/edge details remain secondary/collapsed enough to keep the graph primary.
+- [x] Node/edge details remain secondary/collapsed enough to keep the graph primary.
 - [ ] Guide suggestions can be loaded and filtered.
-- [ ] Layout Overlay can export/import manual positions.
+- [x] Layout Overlay can export/import manual positions.
 - [ ] Analysis Overlay can export confirmed/rejected uncertain edges.
 
 ### Documentation criteria
@@ -102,7 +102,7 @@ V1 is accepted when all criteria are true.
 - [ ] V1 demo commands are copy/paste runnable from the AVT repo root.
 - [ ] Supported frameworks and limitations are clear.
 - [x] Overlay round-trip is documented in `docs/analysis-overlay.md`.
-- [ ] Future multi-language/LSP plan is linked but not presented as v1 functionality.
+- [x] Future multi-language/LSP plan is linked but not presented as v1 functionality.
 
 ### Usefulness criteria
 
