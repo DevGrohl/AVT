@@ -93,6 +93,17 @@ h2 {
   display: none;
 }
 
+button.linkButton {
+  cursor: pointer;
+  justify-self: start;
+  border: 1px solid #c8d5ff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #315efb;
+  background: #eef3ff;
+  font-weight: 800;
+}
+
 .secondaryPicker {
   color: #315efb;
   background: #eef3ff;
@@ -284,6 +295,11 @@ select {
   border: 1px solid #edf1f7;
   border-radius: 12px;
   background: #fbfcff;
+}
+
+.guideList li.selectedGuideSuggestion {
+  border-color: #315efb;
+  background: #eef3ff;
 }
 
 .itemList code {

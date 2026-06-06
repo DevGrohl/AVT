@@ -148,7 +148,15 @@ function App() {
             <DiagramLayoutControls layout={diagramLayout} onChange={setDiagramLayout} />
             <DiagramDisplayControls options={displayOptions} onChange={setDisplayOptions} />
             <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
-            <GuideSummary guide={guide} />
+            <GuideSummary
+              guide={guide}
+              graph={graph}
+              selectedSelectionId={selectedSelectionId}
+              onSelectEntry={(entryId) => {
+                setSelectedSelectionId(`entry:${entryId}`);
+                setSelection(null);
+              }}
+            />
             <Inspector selection={selection} />
           </aside>
 
@@ -268,7 +276,17 @@ function DiagramDisplayControls({ options, onChange }: { options: DiagramDisplay
   );
 }
 
-function GuideSummary({ guide }: { guide: GuideFile | null }) {
+function GuideSummary({
+  guide,
+  graph,
+  selectedSelectionId,
+  onSelectEntry,
+}: {
+  guide: GuideFile | null;
+  graph: ExecutionFlowGraph;
+  selectedSelectionId: string;
+  onSelectEntry: (entryId: string) => void;
+}) {
   if (!guide) {
     return (
       <section className="summaryBlock">
@@ -278,6 +296,7 @@ function GuideSummary({ guide }: { guide: GuideFile | null }) {
     );
   }
 
+  const entryByRef = buildEntryRefIndex(graph);
   return (
     <section className="summaryBlock guidePanel">
       <h3>Guide suggestions</h3>
@@ -287,14 +306,23 @@ function GuideSummary({ guide }: { guide: GuideFile | null }) {
         </ul>
       ) : null}
       <ul className="guideList">
-        {guide.suggested_entry_points.map((suggestion) => (
-          <li key={`${suggestion.entry}:${suggestion.kind}`}>
-            <span className={`certainty certainty-${suggestion.confidence === 'high' ? 'confirmed' : suggestion.confidence === 'medium' ? 'uncertain' : 'rejected'}`}>{suggestion.confidence}</span>
-            <strong>{suggestion.entry}</strong>
-            <p>{suggestion.reason}</p>
-            <p className="hint">Risk: {suggestion.risk}</p>
-          </li>
-        ))}
+        {guide.suggested_entry_points.map((suggestion) => {
+          const entryPoint = entryByRef.get(suggestion.entry);
+          const isSelected = entryPoint ? selectedSelectionId === `entry:${entryPoint.id}` : false;
+          return (
+            <li key={`${suggestion.entry}:${suggestion.kind}`} className={isSelected ? 'selectedGuideSuggestion' : undefined}>
+              <span className={`certainty certainty-${suggestion.confidence === 'high' ? 'confirmed' : suggestion.confidence === 'medium' ? 'uncertain' : 'rejected'}`}>{suggestion.confidence}</span>
+              <strong>{suggestion.entry}</strong>
+              <p>{suggestion.reason}</p>
+              <p className="hint">Risk: {suggestion.risk}</p>
+              {entryPoint ? (
+                <button className="linkButton" type="button" onClick={() => onSelectEntry(entryPoint.id)}>Show flow</button>
+              ) : (
+                <p className="hint">No matching graph Entry Point loaded.</p>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
@@ -405,6 +433,17 @@ function Inspector({ selection }: { selection: InspectorSelection }) {
       <p>{selection.item.evidence.location.path}:{selection.item.evidence.location.line}</p>
     </section>
   );
+}
+
+function buildEntryRefIndex(graph: ExecutionFlowGraph): Map<string, EntryPoint> {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const index = new Map<string, EntryPoint>();
+  for (const entry of graph.entry_points) {
+    const node = nodeById.get(entry.node_id);
+    if (!node?.path || !node.qualified_name) continue;
+    index.set(`${node.path}:${node.qualified_name}`, entry);
+  }
+  return index;
 }
 
 function defaultSelectionId(graph: ExecutionFlowGraph): string {
