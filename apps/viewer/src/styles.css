@@ -221,6 +221,21 @@ select {
   line-height: 1.4;
 }
 
+.guideFilters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.guideFilters label {
+  display: grid;
+  gap: 4px;
+  color: #65708a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .inspector code {
   display: block;
   margin: 8px 0;

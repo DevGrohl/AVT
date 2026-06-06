@@ -393,6 +393,8 @@ function GuideSummary({
   selectedSelectionId: string;
   onSelectEntry: (entryId: string) => void;
 }) {
+  const [confidenceFilter, setConfidenceFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [kindFilter, setKindFilter] = useState<string>('all');
   if (!guide) {
     return (
       <section className="summaryBlock">
@@ -403,6 +405,12 @@ function GuideSummary({
   }
 
   const entryByRef = buildEntryRefIndex(graph);
+  const kinds = [...new Set(guide.suggested_entry_points.map((suggestion) => suggestion.kind))].sort();
+  const filteredSuggestions = guide.suggested_entry_points.filter((suggestion) => {
+    if (confidenceFilter !== 'all' && suggestion.confidence !== confidenceFilter) return false;
+    if (kindFilter !== 'all' && suggestion.kind !== kindFilter) return false;
+    return true;
+  });
   return (
     <section className="summaryBlock guidePanel">
       <h3>Guide suggestions</h3>
@@ -411,8 +419,27 @@ function GuideSummary({
           {guide.project_observations.map((observation, index) => <li key={index}>{observation}</li>)}
         </ul>
       ) : null}
+      <div className="guideFilters">
+        <label>
+          Confidence
+          <select value={confidenceFilter} onChange={(event) => setConfidenceFilter(event.target.value as 'all' | 'high' | 'medium' | 'low')}>
+            <option value="all">All</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+        <label>
+          Kind
+          <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}>
+            <option value="all">All</option>
+            {kinds.map((kind) => <option key={kind} value={kind}>{kind}</option>)}
+          </select>
+        </label>
+      </div>
+      <p className="hint">Showing {filteredSuggestions.length} of {guide.suggested_entry_points.length} suggestion(s).</p>
       <ul className="guideList">
-        {guide.suggested_entry_points.map((suggestion) => {
+        {filteredSuggestions.map((suggestion) => {
           const entryPoint = entryByRef.get(suggestion.entry);
           const isSelected = entryPoint ? selectedSelectionId === `entry:${entryPoint.id}` : false;
           return (
