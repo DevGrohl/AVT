@@ -1197,11 +1197,14 @@ function buildFlowModel(
   }
 
   const layoutModel = diagramLayoutModel(flowNodes, flowEdges, nodeById, layout, displayOptions.showHierarchyContext);
-  const reactFlowNodes = flowNodes.map((node): FlowNode => {
-    const parentId = layoutModel.parentIds.get(node.id);
+  const externalLane = externalLaneModel(flowNodes, layoutModel, layout, displayOptions.showHierarchyContext);
+  const graphReactFlowNodes = flowNodes.map((node): FlowNode => {
+    const externalIndex = externalLane?.externalIds.indexOf(node.id) ?? -1;
+    const parentId = externalIndex >= 0 ? externalLane?.id : layoutModel.parentIds.get(node.id);
+    const position = externalIndex >= 0 ? { x: 32, y: 72 + externalIndex * 96 } : layoutModel.positions.get(node.id) ?? { x: 0, y: 0 };
     return {
       id: node.id,
-      position: layoutModel.positions.get(node.id) ?? { x: 0, y: 0 },
+      position,
       parentId,
       extent: parentId ? 'parent' : undefined,
       data: {
@@ -1212,6 +1215,7 @@ function buildFlowModel(
       zIndex: node.kind === 'module' ? 0 : node.kind === 'class' ? 1 : 2,
     };
   });
+  const reactFlowNodes = externalLane ? [externalLane.node, ...graphReactFlowNodes] : graphReactFlowNodes;
 
   const reactFlowEdges = flowEdges.map((edge): FlowEdge => ({
     id: edge.id,
@@ -1223,6 +1227,58 @@ function buildFlowModel(
   }));
 
   return { flowNodes, flowEdges, reactFlowNodes, reactFlowEdges, nodeById, edgeById, markersByNodeId };
+}
+
+interface ExternalLaneModel {
+  id: string;
+  externalIds: string[];
+  node: FlowNode;
+}
+
+function externalLaneModel(
+  nodes: GraphNode[],
+  layoutModel: DiagramLayoutModel,
+  layout: DiagramLayout,
+  showHierarchyContext: boolean,
+): ExternalLaneModel | null {
+  if (layout !== 'hierarchy-swimlane' || !showHierarchyContext) return null;
+  const externals = nodes.filter((node) => node.kind === 'external').sort(compareHierarchyNodes);
+  if (!externals.length) return null;
+
+  const containers = nodes.filter((node) => (node.kind === 'module' || node.kind === 'class') && !layoutModel.parentIds.has(node.id));
+  const containerRight = containers.length
+    ? Math.max(...containers.map((node) => {
+        const position = layoutModel.positions.get(node.id) ?? { x: 0, y: 0 };
+        const size = layoutModel.sizes.get(node.id) ?? defaultNodeSize(node);
+        return position.x + size.width;
+      }))
+    : 900;
+  const containerTop = containers.length ? Math.min(...containers.map((node) => layoutModel.positions.get(node.id)?.y ?? 0)) : 0;
+  const height = Math.max(180, 72 + externals.length * 96 + 36);
+  const width = 340;
+  return {
+    id: 'viewer:external-interactions-lane',
+    externalIds: externals.map((node) => node.id),
+    node: {
+      id: 'viewer:external-interactions-lane',
+      position: { x: containerRight + 120, y: containerTop },
+      data: { label: `External Interactions (${externals.length})` },
+      type: 'default',
+      selectable: false,
+      draggable: true,
+      style: {
+        width,
+        height,
+        border: '2px dashed #b6c5df',
+        background: '#f7faff',
+        color: '#33415c',
+        fontWeight: 800,
+        borderRadius: 18,
+        padding: 12,
+      },
+      zIndex: 0,
+    },
+  };
 }
 
 function applyViewerResolution(edge: GraphEdge, resolution: 'confirmed' | 'rejected' | undefined): GraphEdge {

@@ -148,7 +148,7 @@ Use **Diagram layout** to switch how the same selected flow is drawn.
 
 V1 stable layout:
 
-- **Swimlane hierarchy** — each module becomes a horizontal lane; direct module functions are arranged horizontally to reduce vertical edge overlap.
+- **Swimlane hierarchy** — each module becomes a horizontal lane; direct module functions are arranged horizontally to reduce vertical edge overlap. External nodes are grouped into a viewer-only **External Interactions** lane on the right so database/filesystem/API calls do not float through the middle of app-code lanes.
 
 Experimental alternatives remain available for exploration but should not block the default onboarding path:
 
