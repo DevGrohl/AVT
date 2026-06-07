@@ -212,6 +212,24 @@ select,
   border-top: 1px solid #edf1f7;
 }
 
+.sidebarSection {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #edf1f7;
+}
+
+.sidebarSection > summary {
+  cursor: pointer;
+  color: #33415c;
+  font-weight: 900;
+  margin-bottom: 12px;
+}
+
+.sidebarSection .summaryBlock {
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
 .checkbox {
   display: flex;
   align-items: center;

@@ -88,6 +88,8 @@ Click **Load guide JSON** to show Guide observations, suggested Entry Points, co
 
 ### Graph summary
 
+The left panel uses collapsible sections for Entry Point selection, diagram options, overlays, and other inspection controls.
+
 The left panel shows:
 
 - project name;
@@ -101,7 +103,7 @@ The left panel shows:
 
 ### Entry Point / Group selector
 
-Use **Search Entry Points / Groups** to filter by route, file, kind, rank, or score, then use **Selected Entry Point / Group** to choose what to inspect. The default selected flow is ranked for likely usefulness instead of simple alphabetical order. Entry options show rank/score, and the selected flow header explains the score reasons. Seed/setup flows and empty framework hooks are de-emphasized so product/auth/domain routes are better v1 defaults.
+Use the combined **Search and select** Entry Point control to filter/select by route, file, kind, rank, or score. The default selected flow is ranked for likely usefulness instead of simple alphabetical order. Entry options show rank/score, and the selected flow header explains the score reasons. Seed/setup flows and empty framework hooks are de-emphasized so product/auth/domain routes are better v1 defaults.
 
 The selector includes:
 
@@ -154,7 +156,7 @@ Experimental alternatives remain available for exploration but should not block 
 
 - **Outline + focused graph** — hierarchy becomes a compact left outline while behavior nodes remain in the main flow graph.
 - **Nested ownership map** — modules/classes are container areas that own their functions/methods.
-- **Code flow paths** — experimental selected-Entry-Point view that lays behavior left-to-right by call depth and separates branch/loop/outcome/external lanes using Flow Marker evidence so a Developer can see possible paths and why they exist. In this layout, `raise` and `return` markers also create viewer-only Error/Success outcome nodes with dashed outcome edges.
+- **Code flow paths** — experimental selected-Entry-Point view that lays behavior left-to-right by call depth and separates branch/loop/outcome/external lanes using Flow Marker evidence so a Developer can see possible paths and why they exist. In this layout, `raise` and `return` markers also create viewer-only Error/Success outcome nodes with dashed outcome edges. Clicking an outcome node opens an inspector explaining the marker reason and nearest detected conditional trigger when available.
 - **Layered flow** — flow-oriented view. Places roots on the left and reachable calls/interactions in later columns while keeping module/class context as container swimlanes when context is enabled. Layout changes force a fresh fit-to-view.
 - **Circular relationships** — relationship overview for spotting clusters/cycles in dense graphs.
 - **Compact grid** — dense scan-friendly layout when labels/lists matter more than edge geometry.

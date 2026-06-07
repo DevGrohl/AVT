@@ -6,9 +6,18 @@ import './styles.css';
 import type { EntryPoint, ExecutionFlow, ExecutionFlowGraph, FlowMarker, GraphEdge, GraphNode, GuideFile } from './graph';
 import { isExecutionFlowGraph, isGuideFile } from './graph';
 
+interface OutcomeInfo {
+  id: string;
+  type: 'error' | 'success';
+  sourceNodeId: string;
+  marker: FlowMarker;
+  trigger: string;
+}
+
 type InspectorSelection =
   | { type: 'node'; item: GraphNode; markers: FlowMarker[] }
   | { type: 'edge'; item: GraphEdge }
+  | { type: 'outcome'; item: OutcomeInfo }
   | null;
 
 type DiagramLayout = 'hierarchy-nested' | 'hierarchy-swimlane' | 'hierarchy-outline' | 'code-flow' | 'layered' | 'circular' | 'grid';
@@ -237,37 +246,50 @@ function App() {
             <GraphSummary graph={graph} />
             <RepositoryHotspots graph={graph} />
 
-            <label className="selectLabel" htmlFor="entryPointSearch">Search Entry Points / Groups</label>
-            <input
-              id="entryPointSearch"
-              className="searchInput"
-              type="search"
-              value={entrySearch}
-              placeholder="Search route, file, kind, score…"
-              onChange={(event) => setEntrySearch(event.target.value)}
-            />
-            <label className="selectLabel" htmlFor="entryPoint">Selected Entry Point / Group</label>
-            <select
-              id="entryPoint"
-              value={selectedOption?.id ?? ''}
-              onChange={(event) => {
-                setSelectedSelectionId(event.target.value);
-                setSelection(null);
-              }}
-            >
-              {visibleSelectionOptions.map((option) => (
-                <option key={option.id} value={option.id}>{option.label}</option>
-              ))}
-            </select>
-            {entrySearch ? <p className="hint">Showing {visibleSelectionOptions.length} of {selectionOptions.length} option(s).</p> : null}
+            <details className="sidebarSection" open>
+              <summary>Entry Point / Group</summary>
+              <label className="selectLabel" htmlFor="entryPointSearch">Search and select</label>
+              <input
+                id="entryPointSearch"
+                className="searchInput"
+                type="search"
+                list="entryPointOptions"
+                value={entrySearch || selectedOption?.label || ''}
+                placeholder="Search route, file, kind, score…"
+                onFocus={() => setEntrySearch('')}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setEntrySearch(value);
+                  const selected = selectionOptions.find((option) => option.label === value);
+                  if (selected) {
+                    setSelectedSelectionId(selected.id);
+                    setSelection(null);
+                    setEntrySearch('');
+                  }
+                }}
+              />
+              <datalist id="entryPointOptions">
+                {visibleSelectionOptions.map((option) => (
+                  <option key={option.id} value={option.label} />
+                ))}
+              </datalist>
+              {entrySearch ? <p className="hint">Showing {visibleSelectionOptions.length} of {selectionOptions.length} option(s).</p> : null}
+              {selectedOption?.kind === 'group' ? <GroupSummary option={selectedOption} /> : null}
+              {selectedEntryPoint ? <EntryPointSummary entryPoint={selectedEntryPoint} /> : null}
+            </details>
 
-            {selectedOption?.kind === 'group' ? <GroupSummary option={selectedOption} /> : null}
-            {selectedEntryPoint ? <EntryPointSummary entryPoint={selectedEntryPoint} /> : null}
-            <DiagramLayoutControls layout={diagramLayout} onChange={setDiagramLayout} />
-            <LayoutOverlayControls editedViewCount={Object.keys(positionOverrides).length} onExport={handleExportLayout} />
-            <DiagramDisplayControls options={displayOptions} onChange={setDisplayOptions} />
-            <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
-            <AnalysisOverlayControls resolutionCount={Object.keys(edgeResolutions).length} onExport={handleExportAnalysisOverlay} />
+            <details className="sidebarSection">
+              <summary>Diagram options</summary>
+              <DiagramLayoutControls layout={diagramLayout} onChange={setDiagramLayout} />
+              <DiagramDisplayControls options={displayOptions} onChange={setDisplayOptions} />
+              <EdgeFilterControls filters={edgeFilters} onChange={setEdgeFilters} />
+            </details>
+
+            <details className="sidebarSection">
+              <summary>Overlays</summary>
+              <LayoutOverlayControls editedViewCount={Object.keys(positionOverrides).length} onExport={handleExportLayout} />
+              <AnalysisOverlayControls resolutionCount={Object.keys(edgeResolutions).length} onExport={handleExportAnalysisOverlay} />
+            </details>
             <GuideSummary
               guide={guide}
               graph={graph}
@@ -330,6 +352,11 @@ function App() {
                     fitView
                     fitViewOptions={{ padding: 0.18 }}
                     onNodeClick={(_: React.MouseEvent, node: FlowNode) => {
+                      const outcome = flowModel.outcomeById.get(String(node.id));
+                      if (outcome) {
+                        setSelection({ type: 'outcome', item: outcome });
+                        return;
+                      }
                       const graphNode = flowModel.nodeById.get(String(node.id));
                       if (graphNode) setSelection({ type: 'node', item: graphNode, markers: flowModel.markersByNodeId.get(graphNode.id) ?? [] });
                     }}
@@ -907,6 +934,20 @@ function Inspector({
     );
   }
 
+  if (selection.type === 'outcome') {
+    const source = graph.nodes.find((node) => node.id === selection.item.sourceNodeId);
+    return (
+      <section className="summaryBlock inspector">
+        <h3>{selection.item.type === 'error' ? 'Error outcome' : 'Success outcome'}</h3>
+        <p><strong>{selection.item.trigger}</strong></p>
+        <p>{selection.item.marker.evidence.reason.label}</p>
+        <p>{selection.item.marker.evidence.location.path}:{selection.item.marker.evidence.location.line}</p>
+        {source ? <p>From <strong>{source.label}</strong></p> : null}
+        <p className="hint">Viewer-only outcome inferred from a `{selection.item.marker.kind}` Flow Marker. It shows the likely path reason without changing graph facts.</p>
+      </section>
+    );
+  }
+
   if (selection.type === 'node') {
     return (
       <section className="summaryBlock inspector">
@@ -1232,7 +1273,7 @@ function buildFlowModel(
     ...outcomeModel.edges,
   ];
 
-  return { flowNodes, flowEdges, reactFlowNodes, reactFlowEdges, nodeById, edgeById, markersByNodeId };
+  return { flowNodes, flowEdges, reactFlowNodes, reactFlowEdges, nodeById, edgeById, markersByNodeId, outcomeById: outcomeModel.outcomeById };
 }
 
 function codeFlowOutcomeModel(
@@ -1240,13 +1281,14 @@ function codeFlowOutcomeModel(
   markers: FlowMarker[],
   layoutModel: DiagramLayoutModel,
   nodeById: Map<string, GraphNode>,
-): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  if (layout !== 'code-flow') return { nodes: [], edges: [] };
+): { nodes: FlowNode[]; edges: FlowEdge[]; outcomeById: Map<string, OutcomeInfo> } {
+  if (layout !== 'code-flow') return { nodes: [], edges: [], outcomeById: new Map() };
   const outcomeMarkers = markers
     .filter((marker) => marker.node_id && (marker.kind === 'raise' || marker.kind === 'return'))
     .sort((a, b) => a.evidence.location.line - b.evidence.location.line || a.id.localeCompare(b.id));
   const nodes: FlowNode[] = [];
   const edges: FlowEdge[] = [];
+  const outcomeById = new Map<string, OutcomeInfo>();
   const laneCounts = new Map<string, number>();
 
   for (const marker of outcomeMarkers) {
@@ -1257,13 +1299,15 @@ function codeFlowOutcomeModel(
     laneCounts.set(outcomeType, count + 1);
     const sourcePosition = layoutModel.positions.get(sourceId) ?? { x: 0, y: 0 };
     const id = `viewer:outcome:${marker.id}`;
+    const trigger = outcomeTrigger(marker, markers);
+    outcomeById.set(id, { id, type: outcomeType, sourceNodeId: sourceId, marker, trigger });
     const yBase = outcomeType === 'error' ? 260 : 760;
     nodes.push({
       id,
       position: { x: sourcePosition.x + 300, y: yBase + count * 96 },
-      data: { label: `${outcomeType === 'error' ? 'Error' : 'Success'}: ${marker.evidence.reason.label} @ line ${marker.evidence.location.line}` },
+      data: { label: `${outcomeType === 'error' ? 'Error' : 'Success'}: ${trigger} @ line ${marker.evidence.location.line}` },
       type: 'default',
-      selectable: false,
+      selectable: true,
       draggable: true,
       style: outcomeNodeStyle(outcomeType),
       zIndex: 3,
@@ -1281,7 +1325,15 @@ function codeFlowOutcomeModel(
       },
     });
   }
-  return { nodes, edges };
+  return { nodes, edges, outcomeById };
+}
+
+function outcomeTrigger(marker: FlowMarker, markers: FlowMarker[]): string {
+  const condition = markers
+    .filter((candidate) => candidate.node_id === marker.node_id && candidate.kind === 'conditional' && candidate.evidence.location.line <= marker.evidence.location.line)
+    .sort((a, b) => b.evidence.location.line - a.evidence.location.line)[0];
+  if (condition) return `${condition.evidence.reason.label} before ${marker.kind}`;
+  return marker.evidence.reason.label;
 }
 
 function outcomeNodeStyle(outcomeType: 'error' | 'success'): React.CSSProperties {
@@ -1372,6 +1424,7 @@ function emptyFlowModel() {
     nodeById: new Map<string, GraphNode>(),
     edgeById: new Map<string, GraphEdge>(),
     markersByNodeId: new Map<string, FlowMarker[]>(),
+    outcomeById: new Map<string, OutcomeInfo>(),
   };
 }
 
