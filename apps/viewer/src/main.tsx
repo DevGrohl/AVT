@@ -1353,10 +1353,10 @@ function codeFlowOutcomeModel(
     const id = `viewer:outcome:${marker.id}`;
     const trigger = marker.trigger_condition.expression;
     outcomeById.set(id, { id, type: outcomeType, sourceNodeId: sourceId, marker, trigger });
-    const offsetX = outcomeType === 'error' ? 0 : 250;
+    const offsetX = outcomeType === 'error' ? 250 : 500;
     nodes.push({
       id,
-      position: { x: Math.max(20, sourcePosition.x + offsetX), y: sourcePosition.y + 190 + count * 112 },
+      position: { x: Math.max(20, sourcePosition.x + offsetX), y: Math.max(520, sourcePosition.y + 190 + count * 112) },
       data: { label: `${outcomeType === 'error' ? 'Error' : 'Success'} when ${trigger}` },
       type: 'default',
       selectable: true,
@@ -1708,10 +1708,14 @@ function codeFlowPositions(
 
   const byDepth = groupBy(normalNodes, (node) => String(depth.get(node.id) ?? fallbackDepth(node, nodeById)));
   for (const [depthKey, depthGroup] of [...byDepth.entries()].sort(([a], [b]) => Number(a) - Number(b))) {
-    depthGroup.sort(compareHierarchyNodes).forEach((node, index) => {
+    const numericDepth = Number(depthKey);
+    const sortedGroup = depthGroup.sort(compareHierarchyNodes);
+    const baseY = numericDepth === 0 ? 360 : 96;
+    const spacingY = numericDepth === 0 ? 150 : 118;
+    sortedGroup.forEach((node, index) => {
       positions.set(node.id, {
-        x: 100 + Number(depthKey) * 360,
-        y: 300 + Number(depthKey) * 58 + index * 170,
+        x: 80 + numericDepth * 330,
+        y: baseY + index * spacingY,
       });
     });
   }
@@ -1728,19 +1732,19 @@ function codeFlowPositions(
       .sort((a, b) => a.id.localeCompare(b.id))
       .forEach((edge, index) => {
         positions.set(edge.target, {
-          x: sourcePosition.x + 40 + index * 36,
-          y: Math.max(24, sourcePosition.y - 170 - index * 110),
+          x: sourcePosition.x + 250 + index * 36,
+          y: Math.max(24, sourcePosition.y - 150 - index * 96),
         });
         positionedExternalIds.add(edge.target);
       });
   }
 
   externalNodes.filter((node) => !positionedExternalIds.has(node.id)).forEach((node, index) => {
-    positions.set(node.id, { x: 100 + index * 280, y: 24 });
+    positions.set(node.id, { x: 420 + index * 280, y: 24 });
   });
 
   nodes.filter((node) => node.kind === 'module' || node.kind === 'class').forEach((node, index) => {
-    positions.set(node.id, { x: 0, y: 1400 + index * 90 });
+    positions.set(node.id, { x: 0, y: 1280 + index * 90 });
   });
   return positions;
 }
