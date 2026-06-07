@@ -1308,94 +1308,18 @@ function buildFlowModel(
       zIndex: node.kind === 'module' ? 0 : node.kind === 'class' ? 1 : 2,
     };
   });
-  const outcomeModel = codeFlowOutcomeModel(layout, flowMarkers, layoutModel, nodeById);
-  const reactFlowNodes = externalLane ? [externalLane.node, ...graphReactFlowNodes, ...outcomeModel.nodes] : [...graphReactFlowNodes, ...outcomeModel.nodes];
+  const reactFlowNodes = externalLane ? [externalLane.node, ...graphReactFlowNodes] : graphReactFlowNodes;
 
-  const reactFlowEdges = [
-    ...flowEdges.map((edge): FlowEdge => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      label: edgeLabel(edge, displayOptions.edgeLabelMode),
-      animated: edge.kind === 'await' || edge.kind === 'external_interaction',
-      style: edgeStyle(edge),
-    })),
-    ...outcomeModel.edges,
-  ];
+  const reactFlowEdges = flowEdges.map((edge): FlowEdge => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    label: edgeLabel(edge, displayOptions.edgeLabelMode),
+    animated: edge.kind === 'await' || edge.kind === 'external_interaction',
+    style: edgeStyle(edge),
+  }));
 
-  return { flowNodes, flowEdges, reactFlowNodes, reactFlowEdges, nodeById, edgeById, markersByNodeId, outcomeById: outcomeModel.outcomeById };
-}
-
-function codeFlowOutcomeModel(
-  layout: DiagramLayout,
-  markers: FlowMarker[],
-  layoutModel: DiagramLayoutModel,
-  nodeById: Map<string, GraphNode>,
-): { nodes: FlowNode[]; edges: FlowEdge[]; outcomeById: Map<string, OutcomeInfo> } {
-  if (layout !== 'code-flow') return { nodes: [], edges: [], outcomeById: new Map() };
-  const outcomeMarkers = markers
-    .filter((marker) => marker.node_id && (marker.kind === 'raise' || marker.kind === 'return'))
-    .sort((a, b) => a.evidence.location.line - b.evidence.location.line || a.id.localeCompare(b.id));
-  const nodes: FlowNode[] = [];
-  const edges: FlowEdge[] = [];
-  const outcomeById = new Map<string, OutcomeInfo>();
-  const laneCounts = new Map<string, number>();
-
-  for (const marker of outcomeMarkers) {
-    const sourceId = marker.node_id!;
-    if (!nodeById.has(sourceId)) continue;
-    const outcomeType = marker.kind === 'raise' ? 'error' : 'success';
-    const count = laneCounts.get(outcomeType) ?? 0;
-    laneCounts.set(outcomeType, count + 1);
-    const sourcePosition = layoutModel.positions.get(sourceId) ?? { x: 0, y: 0 };
-    const id = `viewer:outcome:${marker.id}`;
-    const trigger = outcomeTrigger(marker, markers);
-    outcomeById.set(id, { id, type: outcomeType, sourceNodeId: sourceId, marker, trigger });
-    const yBase = outcomeType === 'error' ? 260 : 760;
-    nodes.push({
-      id,
-      position: { x: sourcePosition.x + 300, y: yBase + count * 96 },
-      data: { label: `${outcomeType === 'error' ? 'Error' : 'Success'}: ${trigger} @ line ${marker.evidence.location.line}` },
-      type: 'default',
-      selectable: true,
-      draggable: true,
-      style: outcomeNodeStyle(outcomeType),
-      zIndex: 3,
-    });
-    edges.push({
-      id: `viewer:outcome-edge:${marker.id}`,
-      source: sourceId,
-      target: id,
-      label: outcomeType === 'error' ? 'error path' : 'return path',
-      animated: outcomeType === 'error',
-      style: {
-        stroke: outcomeType === 'error' ? '#d9480f' : '#2f9e44',
-        strokeDasharray: '6 4',
-        strokeWidth: 2,
-      },
-    });
-  }
-  return { nodes, edges, outcomeById };
-}
-
-function outcomeTrigger(marker: FlowMarker, markers: FlowMarker[]): string {
-  const condition = markers
-    .filter((candidate) => candidate.node_id === marker.node_id && candidate.kind === 'conditional' && candidate.evidence.location.line <= marker.evidence.location.line)
-    .sort((a, b) => b.evidence.location.line - a.evidence.location.line)[0];
-  if (condition) return `${condition.evidence.reason.label} before ${marker.kind}`;
-  return marker.evidence.reason.label;
-}
-
-function outcomeNodeStyle(outcomeType: 'error' | 'success'): React.CSSProperties {
-  return {
-    width: 250,
-    minHeight: 70,
-    borderRadius: 14,
-    border: `2px solid ${outcomeType === 'error' ? '#ffb08a' : '#9be7a8'}`,
-    background: outcomeType === 'error' ? '#fff4ef' : '#effaf0',
-    color: outcomeType === 'error' ? '#8a2f0b' : '#1b6b2a',
-    fontWeight: 800,
-  };
+  return { flowNodes, flowEdges, reactFlowNodes, reactFlowEdges, nodeById, edgeById, markersByNodeId, outcomeById: new Map<string, OutcomeInfo>() };
 }
 
 interface ExternalLaneModel {
