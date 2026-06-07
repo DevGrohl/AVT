@@ -100,7 +100,7 @@ The left panel shows:
 
 ### Entry Point / Group selector
 
-Use **Selected Entry Point / Group** to choose what to inspect. The default selected flow is ranked for likely usefulness instead of simple alphabetical order. Entry options show rank/score, and the selected flow header explains the score reasons. Seed/setup flows and empty framework hooks are de-emphasized so product/auth/domain routes are better v1 defaults.
+Use **Search Entry Points / Groups** to filter by route, file, kind, rank, or score, then use **Selected Entry Point / Group** to choose what to inspect. The default selected flow is ranked for likely usefulness instead of simple alphabetical order. Entry options show rank/score, and the selected flow header explains the score reasons. Seed/setup flows and empty framework hooks are de-emphasized so product/auth/domain routes are better v1 defaults.
 
 The selector includes:
 
@@ -137,7 +137,7 @@ Use **Diagram layout** to switch how the same selected flow is drawn.
 
 V1 stable layout:
 
-- **Swimlane hierarchy** — each module becomes a horizontal lane; classes/functions sit inside the lane to reduce overlap.
+- **Swimlane hierarchy** — each module becomes a horizontal lane; direct module functions are arranged horizontally to reduce vertical edge overlap.
 
 Experimental alternatives remain available for exploration but should not block the default onboarding path:
 

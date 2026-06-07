@@ -54,6 +54,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedSelectionId, setSelectedSelectionId] = useState<string>('');
+  const [entrySearch, setEntrySearch] = useState<string>('');
   const [selection, setSelection] = useState<InspectorSelection>(null);
   const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
   const [edgeResolutions, setEdgeResolutions] = useState<EdgeResolutions>({});
@@ -75,6 +76,19 @@ function App() {
   }, []);
 
   const selectionOptions = useMemo(() => graph ? buildSelectionOptions(graph) : [], [graph]);
+
+  const visibleSelectionOptions = useMemo(() => {
+    const query = entrySearch.trim().toLowerCase();
+    if (!query) return selectionOptions;
+    const tokens = query.split(/\s+/).filter(Boolean);
+    const filtered = selectionOptions.filter((option) => {
+      const haystack = `${option.label} ${option.id}`.toLowerCase();
+      return tokens.every((token) => haystack.includes(token));
+    });
+    const selected = selectionOptions.find((option) => option.id === selectedSelectionId);
+    if (selected && !filtered.some((option) => option.id === selected.id)) return [selected, ...filtered];
+    return filtered;
+  }, [selectionOptions, selectedSelectionId, entrySearch]);
 
   const selectedOption = useMemo(() => {
     if (!selectionOptions.length) return null;
@@ -222,6 +236,15 @@ function App() {
           <aside className="panel sidebar">
             <GraphSummary graph={graph} />
 
+            <label className="selectLabel" htmlFor="entryPointSearch">Search Entry Points / Groups</label>
+            <input
+              id="entryPointSearch"
+              className="searchInput"
+              type="search"
+              value={entrySearch}
+              placeholder="Search route, file, kind, score…"
+              onChange={(event) => setEntrySearch(event.target.value)}
+            />
             <label className="selectLabel" htmlFor="entryPoint">Selected Entry Point / Group</label>
             <select
               id="entryPoint"
@@ -231,10 +254,11 @@ function App() {
                 setSelection(null);
               }}
             >
-              {selectionOptions.map((option) => (
+              {visibleSelectionOptions.map((option) => (
                 <option key={option.id} value={option.id}>{option.label}</option>
               ))}
             </select>
+            {entrySearch ? <p className="hint">Showing {visibleSelectionOptions.length} of {selectionOptions.length} option(s).</p> : null}
 
             {selectedOption?.kind === 'group' ? <GroupSummary option={selectedOption} /> : null}
             {selectedEntryPoint ? <EntryPointSummary entryPoint={selectedEntryPoint} /> : null}
@@ -1102,22 +1126,22 @@ function swimlaneHierarchyPositions(nodes: GraphNode[], nodeById: Map<string, Gr
 
   for (const module of modules) {
     const descendants = internals.filter((node) => hasAncestor(node, module.id, nodeById) || node.parent_id === module.id).sort(compareHierarchyNodes);
-    const laneHeight = Math.max(220, descendants.length * 110 + 120);
     positions.set(module.id, { x: 0, y: laneY });
 
     const moduleFunctions = descendants.filter((node) => (node.kind === 'function' || node.kind === 'method') && directModuleParent(node, module.id, nodeById));
-    moduleFunctions.forEach((node, index) => positions.set(node.id, { x: 360 + (index % 3) * 280, y: laneY + 90 + Math.floor(index / 3) * 120 }));
+    moduleFunctions.forEach((node, index) => positions.set(node.id, { x: 360 + index * 300, y: laneY + 90 }));
 
     const classes = descendants.filter((node) => node.kind === 'class');
-    let classY = laneY + 90 + Math.ceil(moduleFunctions.length / 3) * 120;
+    let classY = laneY + 90 + (moduleFunctions.length ? 140 : 0);
     for (const cls of classes) {
       positions.set(cls.id, { x: 320, y: classY });
       const members = descendants.filter((node) => (node.kind === 'function' || node.kind === 'method') && hasAncestor(node, cls.id, nodeById));
-      members.forEach((member, index) => positions.set(member.id, { x: 620 + (index % 2) * 280, y: classY + 80 + Math.floor(index / 2) * 110 }));
-      classY += Math.max(150, Math.ceil(members.length / 2) * 110 + 120);
+      members.forEach((member, index) => positions.set(member.id, { x: 620 + index * 300, y: classY + 80 }));
+      classY += 190;
     }
 
-    laneY += Math.max(laneHeight, classY - laneY) + 96;
+    const laneHeight = Math.max(220, classY - laneY + 90, moduleFunctions.length ? 230 : 0);
+    laneY += laneHeight + 96;
   }
 
   const positioned = new Set(positions.keys());
