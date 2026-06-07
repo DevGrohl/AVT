@@ -96,7 +96,8 @@ The left panel shows:
 - Entry Point count;
 - Execution Flow count;
 - warning count;
-- secret warning count.
+- secret warning count;
+- collapsible repo hotspots for most-touched files, DB/write-heavy flows, auth/security flows, and uncertainty to review.
 
 ### Entry Point / Group selector
 
@@ -120,7 +121,8 @@ Before the diagram, the main panel shows a compact onboarding section for the se
 - a plain-language flow summary;
 - an execution breadcrumb from the Entry Point through likely behavior calls/interactions;
 - files to read next, ranked by handler/behavior/external evidence;
-- visible External/DB interactions.
+- visible External/DB interactions;
+- a Markdown export button for the selected flow onboarding notes.
 
 ### Graph canvas
 

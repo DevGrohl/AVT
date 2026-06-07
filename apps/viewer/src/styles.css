@@ -277,6 +277,13 @@ select,
   background: #fbfcff;
 }
 
+.onboardingHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .onboardingPanel h3,
 .onboardingPanel h4 {
   margin: 0 0 8px;
@@ -321,6 +328,26 @@ select,
   margin-top: 3px;
   color: #65708a;
   font-size: 12px;
+}
+
+.hotspotList {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.hotspotList h4 {
+  margin: 0 0 6px;
+}
+
+.hotspotList ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.hotspotList li {
+  margin-bottom: 6px;
+  word-break: break-word;
 }
 
 .counts {

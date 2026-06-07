@@ -235,6 +235,7 @@ function App() {
         <section className="layout">
           <aside className="panel sidebar">
             <GraphSummary graph={graph} />
+            <RepositoryHotspots graph={graph} />
 
             <label className="selectLabel" htmlFor="entryPointSearch">Search Entry Points / Groups</label>
             <input
@@ -314,6 +315,8 @@ function App() {
                   }}
                 />
                 <DeveloperOnboardingPanel
+                  projectName={graph.metadata.project_name}
+                  flowLabel={selectedOption?.label ?? selectedFlow.id}
                   entryPoint={selectedEntryPoint}
                   nodes={flowModel.flowNodes}
                   edges={flowModel.flowEdges}
@@ -378,6 +381,62 @@ function GraphSummary({ graph }: { graph: ExecutionFlowGraph }) {
       </dl>
     </>
   );
+}
+
+function RepositoryHotspots({ graph }: { graph: ExecutionFlowGraph }) {
+  const hotspots = useMemo(() => buildRepositoryHotspots(graph), [graph]);
+  return (
+    <section className="summaryBlock">
+      <h3>Repo hotspots</h3>
+      <details className="compactDetails">
+        <summary>Open onboarding overview</summary>
+        <div className="hotspotList">
+          <HotspotBlock title="Most touched files" items={hotspots.files} />
+          <HotspotBlock title="DB/write-heavy flows" items={hotspots.dbFlows} />
+          <HotspotBlock title="Auth/security flows" items={hotspots.securityFlows} />
+          <HotspotBlock title="Uncertainty to review" items={hotspots.uncertain} />
+        </div>
+      </details>
+    </section>
+  );
+}
+
+function HotspotBlock({ title, items }: { title: string; items: string[] }) {
+  return (
+    <section>
+      <h4>{title}</h4>
+      {items.length ? <ol>{items.map((item) => <li key={item}>{item}</li>)}</ol> : <p className="hint">None detected.</p>}
+    </section>
+  );
+}
+
+function buildRepositoryHotspots(graph: ExecutionFlowGraph): { files: string[]; dbFlows: string[]; securityFlows: string[]; uncertain: string[] } {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const edgeById = new Map(graph.edges.map((edge) => [edge.id, edge]));
+  const entryById = new Map(graph.entry_points.map((entry) => [entry.id, entry]));
+  const fileCounts = new Map<string, number>();
+  for (const node of graph.nodes) if (node.path) fileCounts.set(node.path, (fileCounts.get(node.path) ?? 0) + 1);
+  for (const edge of graph.edges) fileCounts.set(edge.evidence.location.path, (fileCounts.get(edge.evidence.location.path) ?? 0) + 1);
+
+  const flowFacts = graph.flows.map((flow) => {
+    const entry = entryById.get(flow.entry_point_id);
+    const edges = flow.edge_ids.map((id) => edgeById.get(id)).filter((edge): edge is GraphEdge => Boolean(edge));
+    const labels = flow.node_ids.map((id) => nodeById.get(id)?.label ?? '').join(' ').toLowerCase();
+    const entryLabel = entry?.label ?? flow.id;
+    return {
+      label: entryLabel,
+      dbScore: edges.filter((edge) => edge.kind === 'external_interaction' && (nodeById.get(edge.target)?.label ?? '').includes('database:')).length,
+      securityScore: /auth|token|login|security|session|current_user|user/.test(`${entryLabel} ${labels}`.toLowerCase()) ? 1 : 0,
+      uncertainScore: edges.filter((edge) => edge.certainty === 'uncertain').length,
+    };
+  });
+
+  return {
+    files: [...fileCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5).map(([path, count]) => `${path} (${count})`),
+    dbFlows: flowFacts.filter((flow) => flow.dbScore > 0).sort((a, b) => b.dbScore - a.dbScore || a.label.localeCompare(b.label)).slice(0, 5).map((flow) => `${flow.label} (${flow.dbScore})`),
+    securityFlows: flowFacts.filter((flow) => flow.securityScore > 0).slice(0, 5).map((flow) => flow.label),
+    uncertain: flowFacts.filter((flow) => flow.uncertainScore > 0).sort((a, b) => b.uncertainScore - a.uncertainScore || a.label.localeCompare(b.label)).slice(0, 5).map((flow) => `${flow.label} (${flow.uncertainScore})`),
+  };
 }
 
 function GroupSummary({ option }: { option: FlowSelectionOption }) {
@@ -609,13 +668,28 @@ interface FlowOnboardingInfo {
   externalInteractions: string[];
 }
 
-function DeveloperOnboardingPanel({ entryPoint, nodes, edges }: { entryPoint: EntryPoint | null; nodes: GraphNode[]; edges: GraphEdge[] }) {
+function DeveloperOnboardingPanel({
+  projectName,
+  flowLabel,
+  entryPoint,
+  nodes,
+  edges,
+}: {
+  projectName: string;
+  flowLabel: string;
+  entryPoint: EntryPoint | null;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}) {
   const info = useMemo(() => buildFlowOnboardingInfo(entryPoint, nodes, edges), [entryPoint, nodes, edges]);
   return (
     <section className="onboardingPanel">
-      <div>
-        <h3>Developer onboarding</h3>
-        <p>{info.summary}</p>
+      <div className="onboardingHeader">
+        <div>
+          <h3>Developer onboarding</h3>
+          <p>{info.summary}</p>
+        </div>
+        <button className="linkButton" type="button" onClick={() => exportFlowOnboardingReport(projectName, flowLabel, info)}>Export Markdown</button>
       </div>
       <div className="onboardingGrid">
         <section>
@@ -649,6 +723,42 @@ function DeveloperOnboardingPanel({ entryPoint, nodes, edges }: { entryPoint: En
       </div>
     </section>
   );
+}
+
+function exportFlowOnboardingReport(projectName: string, flowLabel: string, info: FlowOnboardingInfo) {
+  const lines = [
+    `# ${projectName} flow onboarding`,
+    '',
+    `## ${flowLabel}`,
+    '',
+    info.summary,
+    '',
+    '## Execution breadcrumb',
+    '',
+    ...(info.breadcrumbs.length ? info.breadcrumbs.map((node, index) => `${index + 1}. **${node.kind}** ${node.label}${node.path ? ` (${node.path})` : ''}`) : ['No readable behavior path found.']),
+    '',
+    '## Files to read next',
+    '',
+    ...(info.files.length ? info.files.map((file, index) => `${index + 1}. \`${file.path}\` — ${file.reason}`) : ['No source files found.']),
+    '',
+    '## External/DB interactions',
+    '',
+    ...(info.externalInteractions.length ? info.externalInteractions.map((label) => `- ${label}`) : ['No external interactions visible.']),
+    '',
+  ];
+  downloadText(`${projectName || 'avt'}-flow-onboarding.md`, lines.join('\n'), 'text/markdown');
+}
+
+function downloadText(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function buildFlowOnboardingInfo(entryPoint: EntryPoint | null, nodes: GraphNode[], edges: GraphEdge[]): FlowOnboardingInfo {
