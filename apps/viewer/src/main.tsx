@@ -1711,7 +1711,7 @@ function codeFlowPositions(
     depthGroup.sort(compareHierarchyNodes).forEach((node, index) => {
       positions.set(node.id, {
         x: 100 + Number(depthKey) * 360,
-        y: 300 + index * 170,
+        y: 300 + Number(depthKey) * 58 + index * 170,
       });
     });
   }
