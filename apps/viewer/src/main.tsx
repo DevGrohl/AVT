@@ -279,6 +279,7 @@ function App() {
             />
             <Inspector
               selection={selection}
+              graph={graph}
               onResolveEdge={(edge, certainty) => {
                 setEdgeResolutions((previous) => ({ ...previous, [edge.id]: certainty }));
                 setNotice(`Marked selected edge as ${certainty} in the in-memory Analysis Overlay.`);
@@ -886,10 +887,12 @@ function FlowLists({ nodes, edges, markersByNodeId }: { nodes: GraphNode[]; edge
 
 function Inspector({
   selection,
+  graph,
   onResolveEdge,
   onClearEdgeResolution,
 }: {
   selection: InspectorSelection;
+  graph: ExecutionFlowGraph;
   onResolveEdge: (edge: GraphEdge, certainty: 'confirmed' | 'rejected') => void;
   onClearEdgeResolution: (edge: GraphEdge) => void;
 }) {
@@ -919,6 +922,7 @@ function Inspector({
             </ul>
           </>
         ) : null}
+        <NodeUsageImpact node={selection.item} graph={graph} />
       </section>
     );
   }
@@ -939,6 +943,43 @@ function Inspector({
       ) : <p className="hint">Only uncertain edges can be exported as overlay resolutions.</p>}
     </section>
   );
+}
+
+function NodeUsageImpact({ node, graph }: { node: GraphNode; graph: ExecutionFlowGraph }) {
+  const impact = useMemo(() => buildNodeImpact(node, graph), [node, graph]);
+  return (
+    <div className="nodeImpact">
+      <h4>Where this is used</h4>
+      <p className="hint">Impact view across all analyzed flows.</p>
+      <h5>Reachable from Entry Points</h5>
+      {impact.flows.length ? <ul>{impact.flows.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="hint">No Entry Point flow references this node.</p>}
+      <h5>Callers</h5>
+      {impact.callers.length ? <ul>{impact.callers.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="hint">No callers found in graph.</p>}
+      <h5>Callees / interactions</h5>
+      {impact.callees.length ? <ul>{impact.callees.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="hint">No callees found in graph.</p>}
+    </div>
+  );
+}
+
+function buildNodeImpact(node: GraphNode, graph: ExecutionFlowGraph): { flows: string[]; callers: string[]; callees: string[] } {
+  const nodeById = new Map(graph.nodes.map((item) => [item.id, item]));
+  const entryById = new Map(graph.entry_points.map((entry) => [entry.id, entry]));
+  const flows = graph.flows
+    .filter((flow) => flow.node_ids.includes(node.id))
+    .map((flow) => entryById.get(flow.entry_point_id)?.label ?? flow.id)
+    .sort()
+    .slice(0, 8);
+  const callers = graph.edges
+    .filter((edge) => edge.target === node.id)
+    .map((edge) => `${nodeById.get(edge.source)?.label ?? edge.source} (${edge.kind}, ${edge.certainty})`)
+    .sort()
+    .slice(0, 8);
+  const callees = graph.edges
+    .filter((edge) => edge.source === node.id)
+    .map((edge) => `${nodeById.get(edge.target)?.label ?? edge.target} (${edge.kind}, ${edge.certainty})`)
+    .sort()
+    .slice(0, 8);
+  return { flows, callers, callees };
 }
 
 interface EntryImportance {

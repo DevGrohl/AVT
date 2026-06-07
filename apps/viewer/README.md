@@ -183,7 +183,8 @@ Node inspector shows:
 - path when available;
 - qualified name when available;
 - signature when available;
-- Flow Markers attached to the node.
+- Flow Markers attached to the node;
+- impact view: Entry Point flows that reach the node, callers, and callees/interactions.
 
 Edge inspector shows:
 
