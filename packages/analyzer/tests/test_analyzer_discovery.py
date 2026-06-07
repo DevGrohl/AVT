@@ -518,6 +518,45 @@ class AnalyzerDiscoveryTests(unittest.TestCase):
         self.assertGreaterEqual(marker_kinds, {"async", "loop", "conditional", "return", "raise"})
         self.assertEqual(set(graph["flows"][0]["marker_ids"]), {marker["id"] for marker in graph["markers"]})
 
+    def test_cli_adds_trigger_conditions_to_outcome_markers(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "app.py").write_text(
+                textwrap.dedent(
+                    """
+                    @app.get('/users/{id}')
+                    def get_user(user, active):
+                        if user is None:
+                            raise ValueError('missing')
+                        if not active:
+                            return None
+                        try:
+                            return user
+                        except RuntimeError:
+                            raise
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            out = root / "graph.json"
+
+            subprocess.run(
+                [sys.executable, "-m", "avt_analyzer.cli", "analyze", str(root), "--no-timestamp", "--out", str(out)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            graph = json.loads(out.read_text(encoding="utf-8"))
+
+        triggers = {
+            (marker["kind"], marker.get("trigger_condition", {}).get("expression"), marker.get("trigger_condition", {}).get("source"))
+            for marker in graph["markers"]
+            if marker["kind"] in {"raise", "return"}
+        }
+        self.assertIn(("raise", "user is None", "if"), triggers)
+        self.assertIn(("return", "not active", "if"), triggers)
+        self.assertIn(("raise", "except RuntimeError", "except"), triggers)
+
     def test_cli_resolves_imported_local_functions(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

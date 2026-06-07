@@ -70,12 +70,19 @@ class EntryPoint(TypedDict):
     http_methods: NotRequired[list[str]]
 
 
+class TriggerCondition(TypedDict):
+    expression: str
+    source: Literal["if", "else", "except", "loop"]
+    certainty: Certainty
+
+
 class FlowMarker(TypedDict):
     id: str
     kind: FlowMarkerKind
     node_id: NotRequired[str]
     edge_id: NotRequired[str]
     evidence: Evidence
+    trigger_condition: NotRequired[TriggerCondition]
 
 
 class ExecutionFlow(TypedDict):

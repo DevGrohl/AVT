@@ -59,12 +59,19 @@ export interface EntryPoint {
   http_methods?: string[];
 }
 
+export interface TriggerCondition {
+  expression: string;
+  source: 'if' | 'else' | 'except' | 'loop';
+  certainty: Certainty;
+}
+
 export interface FlowMarker {
   id: string;
   kind: FlowMarkerKind;
   node_id?: string;
   edge_id?: string;
   evidence: Evidence;
+  trigger_condition?: TriggerCondition;
 }
 
 export interface ExecutionFlow {
