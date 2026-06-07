@@ -296,6 +296,8 @@ Reachable functions can receive Flow Markers for static behavior evidence:
 - `raise` — `raise` statement;
 - `return` — `return` statement.
 
+Experimental outcome markers: `raise` and `return` markers include `trigger_condition` when a safe nearest control-flow condition can be inferred. Examples include `user is None`, `not active`, `except ValueError`, or `loop iteration`. String literals are redacted as `<string>`.
+
 ## Graph output
 
 Top-level JSON keys:

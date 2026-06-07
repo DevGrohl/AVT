@@ -133,6 +133,7 @@ def _walk_entry(
 
 def _markers_from_function(function: FunctionInfo) -> list[FlowMarker]:
     markers: list[FlowMarker] = []
+    parent_map = _parent_map(function.node)
     if isinstance(function.node, ast.AsyncFunctionDef):
         markers.append(_build_marker(function, "async", function.node, "async_function", "Function is async"))
 
@@ -146,9 +147,13 @@ def _markers_from_function(function: FunctionInfo) -> list[FlowMarker]:
         elif isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
             markers.append(_build_marker(function, "loop", node, "loop", "Function contains loop flow"))
         elif isinstance(node, ast.Raise):
-            markers.append(_build_marker(function, "raise", node, "raise", "Function can raise"))
+            trigger = _nearest_trigger_condition(node, parent_map)
+            label = f"Function can raise when {trigger['expression']}" if trigger else "Function can raise"
+            markers.append(_build_marker(function, "raise", node, "raise", label, trigger_condition=trigger))
         elif isinstance(node, ast.Return):
-            markers.append(_build_marker(function, "return", node, "return", "Function returns"))
+            trigger = _nearest_trigger_condition(node, parent_map)
+            label = f"Function returns when {trigger['expression']}" if trigger else "Function returns"
+            markers.append(_build_marker(function, "return", node, "return", label, trigger_condition=trigger))
 
     unique = {marker["id"]: marker for marker in markers}
     return [marker for _, marker in sorted(unique.items())]
@@ -160,14 +165,127 @@ def _build_marker(
     node: ast.AST,
     reason_code: str,
     reason_label: str,
+    trigger_condition: dict[str, str] | None = None,
 ) -> FlowMarker:
     location = _source_location(function.relative_path, node)
-    return {
+    marker: FlowMarker = {
         "id": f"marker:{kind}:{function.node_id}:{location['line']}:{location['column']}",
         "kind": kind,
         "node_id": function.node_id,
         "evidence": {"location": location, "reason": {"code": reason_code, "label": reason_label}},
     }
+    if trigger_condition is not None:
+        marker["trigger_condition"] = trigger_condition  # type: ignore[typeddict-item]
+    return marker
+
+
+def _parent_map(root: ast.AST) -> dict[ast.AST, ast.AST]:
+    parents: dict[ast.AST, ast.AST] = {}
+    for parent in ast.walk(root):
+        for child in ast.iter_child_nodes(parent):
+            parents[child] = parent
+    return parents
+
+
+def _nearest_trigger_condition(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> dict[str, str] | None:
+    child = node
+    parent = parents.get(child)
+    while parent is not None:
+        if isinstance(parent, ast.If):
+            expression = _safe_condition_expression(parent.test)
+            if not expression:
+                return None
+            if child in parent.body:
+                return {"expression": expression, "source": "if", "certainty": "confirmed"}
+            if child in parent.orelse:
+                if isinstance(child, ast.If):
+                    elif_expression = _safe_condition_expression(child.test)
+                    if elif_expression:
+                        return {"expression": elif_expression, "source": "if", "certainty": "confirmed"}
+                return {"expression": f"not ({expression})", "source": "else", "certainty": "confirmed"}
+        if isinstance(parent, ast.ExceptHandler):
+            exception_name = _safe_condition_expression(parent.type) if parent.type is not None else "exception"
+            return {"expression": f"except {exception_name}", "source": "except", "certainty": "confirmed"}
+        if isinstance(parent, (ast.For, ast.AsyncFor, ast.While)):
+            if isinstance(parent, ast.While):
+                expression = _safe_condition_expression(parent.test)
+            else:
+                expression = "loop iteration"
+            if expression:
+                return {"expression": expression, "source": "loop", "certainty": "uncertain"}
+        child = parent
+        parent = parents.get(parent)
+    return None
+
+
+def _safe_condition_expression(node: ast.AST | None) -> str | None:
+    if node is None:
+        return None
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        value = _safe_condition_expression(node.value)
+        return f"{value}.{node.attr}" if value else node.attr
+    if isinstance(node, ast.Constant):
+        if node.value is None or isinstance(node.value, bool):
+            return repr(node.value)
+        if isinstance(node.value, int) and -999 <= node.value <= 999:
+            return str(node.value)
+        if isinstance(node.value, str):
+            return "<string>"
+        return "<literal>"
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        operand = _safe_condition_expression(node.operand)
+        return f"not {operand}" if operand else None
+    if isinstance(node, ast.BoolOp):
+        op = " and " if isinstance(node.op, ast.And) else " or "
+        parts = [_safe_condition_expression(value) for value in node.values]
+        clean = [part for part in parts if part]
+        return op.join(clean) if clean else None
+    if isinstance(node, ast.Compare):
+        left = _safe_condition_expression(node.left)
+        if not left:
+            return None
+        pieces = [left]
+        for op, comparator in zip(node.ops, node.comparators):
+            right = _safe_condition_expression(comparator)
+            if not right:
+                return None
+            pieces.extend([_safe_compare_op(op), right])
+        return " ".join(pieces)
+    if isinstance(node, ast.Call):
+        func = _safe_condition_expression(node.func)
+        return f"{func}(...)" if func else "call(...)"
+    if isinstance(node, ast.Subscript):
+        value = _safe_condition_expression(node.value)
+        return f"{value}[...]" if value else None
+    if isinstance(node, ast.BinOp):
+        return "expression"
+    return None
+
+
+def _safe_compare_op(op: ast.cmpop) -> str:
+    if isinstance(op, ast.Eq):
+        return "=="
+    if isinstance(op, ast.NotEq):
+        return "!="
+    if isinstance(op, ast.Is):
+        return "is"
+    if isinstance(op, ast.IsNot):
+        return "is not"
+    if isinstance(op, ast.In):
+        return "in"
+    if isinstance(op, ast.NotIn):
+        return "not in"
+    if isinstance(op, ast.Lt):
+        return "<"
+    if isinstance(op, ast.LtE):
+        return "<="
+    if isinstance(op, ast.Gt):
+        return ">"
+    if isinstance(op, ast.GtE):
+        return ">="
+    return "?"
 
 
 def _calls_from_function(context: _AnalysisContext, function: FunctionInfo) -> list[FlowEdge]:

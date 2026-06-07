@@ -275,6 +275,7 @@ scripts/smoke-v1-realtor-viewer.sh /tmp/avt-realtor-v1.json
 - `docs/analysis-overlay.md` — Analysis Overlay schema and confirm/reject round trip.
 - `docs/layout-overlay.md` — viewer layout overlay schema.
 - `docs/future-lsp-multilanguage-plan.md` — future LSP-assisted multi-language architecture plan.
+- `docs/experimental-code-flow-layout.md` — experimental Code Flow layout and trigger-condition outcome design.
 - `docs/development.md` — local development commands.
 - `docs/adr/` — architecture decisions.
 - `docs/validation/` — validation notes and QA artifacts, including Phase 2 Guide validation.

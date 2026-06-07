@@ -990,6 +990,7 @@ function Inspector({
       <section className="summaryBlock inspector">
         <h3>{selection.item.type === 'error' ? 'Error outcome' : 'Success outcome'}</h3>
         <p><strong>{selection.item.trigger}</strong></p>
+        {selection.item.marker.trigger_condition ? <p>Trigger source: {selection.item.marker.trigger_condition.source} ({selection.item.marker.trigger_condition.certainty})</p> : null}
         <p>{selection.item.marker.evidence.reason.label}</p>
         <p>{selection.item.marker.evidence.location.path}:{selection.item.marker.evidence.location.line}</p>
         {source ? <p>From <strong>{source.label}</strong></p> : null}
@@ -1308,18 +1309,87 @@ function buildFlowModel(
       zIndex: node.kind === 'module' ? 0 : node.kind === 'class' ? 1 : 2,
     };
   });
-  const reactFlowNodes = externalLane ? [externalLane.node, ...graphReactFlowNodes] : graphReactFlowNodes;
+  const outcomeModel = codeFlowOutcomeModel(layout, flowMarkers, layoutModel, nodeById);
+  const reactFlowNodes = externalLane ? [externalLane.node, ...graphReactFlowNodes, ...outcomeModel.nodes] : [...graphReactFlowNodes, ...outcomeModel.nodes];
 
-  const reactFlowEdges = flowEdges.map((edge): FlowEdge => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    label: edgeLabel(edge, displayOptions.edgeLabelMode),
-    animated: edge.kind === 'await' || edge.kind === 'external_interaction',
-    style: edgeStyle(edge),
-  }));
+  const reactFlowEdges = [
+    ...flowEdges.map((edge): FlowEdge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: edgeLabel(edge, displayOptions.edgeLabelMode),
+      animated: edge.kind === 'await' || edge.kind === 'external_interaction',
+      style: edgeStyle(edge),
+    })),
+    ...outcomeModel.edges,
+  ];
 
-  return { flowNodes, flowEdges, reactFlowNodes, reactFlowEdges, nodeById, edgeById, markersByNodeId, outcomeById: new Map<string, OutcomeInfo>() };
+  return { flowNodes, flowEdges, reactFlowNodes, reactFlowEdges, nodeById, edgeById, markersByNodeId, outcomeById: outcomeModel.outcomeById };
+}
+
+function codeFlowOutcomeModel(
+  layout: DiagramLayout,
+  markers: FlowMarker[],
+  layoutModel: DiagramLayoutModel,
+  nodeById: Map<string, GraphNode>,
+): { nodes: FlowNode[]; edges: FlowEdge[]; outcomeById: Map<string, OutcomeInfo> } {
+  if (layout !== 'code-flow') return { nodes: [], edges: [], outcomeById: new Map() };
+  const outcomeMarkers = markers
+    .filter((marker) => marker.node_id && marker.trigger_condition && (marker.kind === 'raise' || marker.kind === 'return'))
+    .sort((a, b) => a.evidence.location.line - b.evidence.location.line || a.id.localeCompare(b.id));
+  const nodes: FlowNode[] = [];
+  const edges: FlowEdge[] = [];
+  const outcomeById = new Map<string, OutcomeInfo>();
+  const laneCounts = new Map<string, number>();
+
+  for (const marker of outcomeMarkers) {
+    const sourceId = marker.node_id!;
+    if (!nodeById.has(sourceId) || !marker.trigger_condition) continue;
+    const outcomeType = marker.kind === 'raise' ? 'error' : 'success';
+    const countKey = `${outcomeType}:${sourceId}`;
+    const count = laneCounts.get(countKey) ?? 0;
+    laneCounts.set(countKey, count + 1);
+    const sourcePosition = layoutModel.positions.get(sourceId) ?? { x: 0, y: 0 };
+    const id = `viewer:outcome:${marker.id}`;
+    const trigger = marker.trigger_condition.expression;
+    outcomeById.set(id, { id, type: outcomeType, sourceNodeId: sourceId, marker, trigger });
+    const offsetX = outcomeType === 'error' ? -300 : 260;
+    nodes.push({
+      id,
+      position: { x: Math.max(20, sourcePosition.x + offsetX), y: sourcePosition.y + 150 + count * 102 },
+      data: { label: `${outcomeType === 'error' ? 'Error' : 'Success'} when ${trigger}` },
+      type: 'default',
+      selectable: true,
+      draggable: true,
+      style: outcomeNodeStyle(outcomeType),
+      zIndex: 3,
+    });
+    edges.push({
+      id: `viewer:outcome-edge:${marker.id}`,
+      source: sourceId,
+      target: id,
+      label: outcomeType === 'error' ? 'error path' : 'return path',
+      animated: outcomeType === 'error',
+      style: {
+        stroke: outcomeType === 'error' ? '#d9480f' : '#2f9e44',
+        strokeDasharray: '6 4',
+        strokeWidth: 2,
+      },
+    });
+  }
+  return { nodes, edges, outcomeById };
+}
+
+function outcomeNodeStyle(outcomeType: 'error' | 'success'): React.CSSProperties {
+  return {
+    width: 250,
+    minHeight: 70,
+    borderRadius: 14,
+    border: `2px solid ${outcomeType === 'error' ? '#ffb08a' : '#9be7a8'}`,
+    background: outcomeType === 'error' ? '#fff4ef' : '#effaf0',
+    color: outcomeType === 'error' ? '#8a2f0b' : '#1b6b2a',
+    fontWeight: 800,
+  };
 }
 
 interface ExternalLaneModel {
@@ -1601,32 +1671,34 @@ function codeFlowPositions(
   nodes: GraphNode[],
   edges: GraphEdge[],
   nodeById: Map<string, GraphNode>,
-  markersByNodeId: Map<string, FlowMarker[]>,
+  _markersByNodeId: Map<string, FlowMarker[]>,
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
   const behaviorNodes = nodes.filter((node) => node.kind !== 'module' && node.kind !== 'class').sort(compareHierarchyNodes);
-  const behaviorIds = new Set(behaviorNodes.map((node) => node.id));
+  const normalNodes = behaviorNodes.filter((node) => node.kind !== 'external');
+  const normalIds = new Set(normalNodes.map((node) => node.id));
+  const externalNodes = behaviorNodes.filter((node) => node.kind === 'external');
   const incoming = new Map<string, number>();
   const outgoing = new Map<string, string[]>();
 
-  for (const node of behaviorNodes) {
+  for (const node of normalNodes) {
     incoming.set(node.id, 0);
     outgoing.set(node.id, []);
   }
   for (const edge of edges) {
-    if (!behaviorIds.has(edge.source) || !behaviorIds.has(edge.target)) continue;
+    if (!normalIds.has(edge.source) || !normalIds.has(edge.target)) continue;
     outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target]);
     incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
   }
 
-  const roots = behaviorNodes.filter((node) => (incoming.get(node.id) ?? 0) === 0 && node.kind !== 'external');
-  const queue = (roots.length ? roots : behaviorNodes.filter((node) => node.kind !== 'external')).map((node) => node.id);
+  const roots = normalNodes.filter((node) => (incoming.get(node.id) ?? 0) === 0);
+  const queue = (roots.length ? roots : normalNodes).map((node) => node.id);
   const depth = new Map<string, number>();
   for (const id of queue) depth.set(id, 0);
 
   while (queue.length) {
     const id = queue.shift()!;
-    const nextDepth = (depth.get(id) ?? 0) + 1;
+    const nextDepth = Math.min((depth.get(id) ?? 0) + 1, 7);
     for (const target of outgoing.get(id) ?? []) {
       if ((depth.get(target) ?? -1) >= nextDepth) continue;
       depth.set(target, nextDepth);
@@ -1634,36 +1706,48 @@ function codeFlowPositions(
     }
   }
 
-  const laneGroups = groupBy(behaviorNodes, (node) => codeFlowLane(node, markersByNodeId.get(node.id) ?? []));
-  const laneOrder = ['entry-call', 'branch', 'loop', 'outcome', 'external', 'other'];
-  const laneBaseY = new Map(laneOrder.map((lane, index) => [lane, index * 240]));
-  for (const lane of laneOrder) {
-    const group = (laneGroups.get(lane) ?? []).sort((a, b) => (depth.get(a.id) ?? fallbackDepth(a, nodeById)) - (depth.get(b.id) ?? fallbackDepth(b, nodeById)) || a.id.localeCompare(b.id));
-    const byDepth = groupBy(group, (node) => String(depth.get(node.id) ?? fallbackDepth(node, nodeById)));
-    for (const [depthKey, depthGroup] of byDepth.entries()) {
-      depthGroup.sort(compareHierarchyNodes).forEach((node, index) => {
-        positions.set(node.id, {
-          x: 80 + Number(depthKey) * 360,
-          y: (laneBaseY.get(lane) ?? 0) + index * 92,
-        });
+  const byDepth = groupBy(normalNodes, (node) => String(depth.get(node.id) ?? fallbackDepth(node, nodeById)));
+  for (const [depthKey, depthGroup] of [...byDepth.entries()].sort(([a], [b]) => Number(a) - Number(b))) {
+    const numericDepth = Number(depthKey);
+    const sortedGroup = depthGroup.sort(compareHierarchyNodes);
+    const centerX = 380;
+    const spacingX = 310;
+    const rowWidth = Math.max(0, (sortedGroup.length - 1) * spacingX);
+    sortedGroup.forEach((node, index) => {
+      positions.set(node.id, {
+        x: centerX + numericDepth * 230 - rowWidth / 2 + index * spacingX,
+        y: 120 + numericDepth * 230,
       });
-    }
+    });
   }
 
+  const externalBySource = groupBy(
+    edges.filter((edge) => edge.kind === 'external_interaction' && positions.has(edge.source)),
+    (edge) => edge.source,
+  );
+  const positionedExternalIds = new Set<string>();
+  for (const [sourceId, sourceEdges] of externalBySource.entries()) {
+    const sourcePosition = positions.get(sourceId) ?? { x: 80, y: 240 };
+    sourceEdges
+      .filter((edge) => externalNodes.some((node) => node.id === edge.target))
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .forEach((edge, index) => {
+        positions.set(edge.target, {
+          x: sourcePosition.x + 360 + (index % 3) * 210,
+          y: Math.max(24, sourcePosition.y - 180 - Math.floor(index / 3) * 100),
+        });
+        positionedExternalIds.add(edge.target);
+      });
+  }
+
+  externalNodes.filter((node) => !positionedExternalIds.has(node.id)).forEach((node, index) => {
+    positions.set(node.id, { x: 760 + index * 260, y: 24 });
+  });
+
   nodes.filter((node) => node.kind === 'module' || node.kind === 'class').forEach((node, index) => {
-    positions.set(node.id, { x: 0, y: 1320 + index * 78 });
+    positions.set(node.id, { x: 0, y: 1400 + index * 90 });
   });
   return positions;
-}
-
-function codeFlowLane(node: GraphNode, markers: FlowMarker[]): string {
-  if (node.kind === 'external') return 'external';
-  const markerKinds = new Set(markers.map((marker) => marker.kind));
-  if (markerKinds.has('conditional') || markerKinds.has('raise')) return 'branch';
-  if (markerKinds.has('loop')) return 'loop';
-  if (markerKinds.has('return')) return 'outcome';
-  if (node.kind === 'function' || node.kind === 'method') return 'entry-call';
-  return 'other';
 }
 
 function layeredPositions(nodes: GraphNode[], edges: GraphEdge[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {

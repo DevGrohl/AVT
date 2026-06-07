@@ -156,7 +156,7 @@ Experimental alternatives remain available for exploration but should not block 
 
 - **Outline + focused graph** — hierarchy becomes a compact left outline while behavior nodes remain in the main flow graph.
 - **Nested ownership map** — modules/classes are container areas that own their functions/methods.
-- **Code flow paths** — experimental selected-Entry-Point view that lays behavior left-to-right by call depth and separates branch/loop/outcome/external lanes using Flow Marker evidence so a Developer can see possible paths and why they exist. Error/success outcome nodes are intentionally paused until the analyzer can provide specific logical trigger conditions instead of generic marker labels.
+- **Code flow paths** — experimental selected-Entry-Point view that uses a compact top-down hierarchy: the Entry Point/root starts near the top, normal calls descend through the center/right with stronger rightward separation, External Interactions attach as above-right clusters near their caller, and triggered Error/Success outcomes branch below with errors biased left. When the analyzer provides a safe trigger condition, `raise` and `return` markers create viewer-only outcome nodes such as `Error when not account` or `Error when except ValueError`.
 - **Layered flow** — flow-oriented view. Places roots on the left and reachable calls/interactions in later columns while keeping module/class context as container swimlanes when context is enabled. Layout changes force a fresh fit-to-view.
 - **Circular relationships** — relationship overview for spotting clusters/cycles in dense graphs.
 - **Compact grid** — dense scan-friendly layout when labels/lists matter more than edge geometry.
