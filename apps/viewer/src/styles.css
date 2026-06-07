@@ -206,6 +206,64 @@ select,
   margin-bottom: 12px;
 }
 
+.comboBox {
+  position: relative;
+}
+
+.comboButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dbe2ef;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #172033;
+  cursor: pointer;
+  text-align: left;
+}
+
+.comboButton span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comboPanel {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #dbe2ef;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(23, 32, 51, 0.14);
+}
+
+.comboList {
+  max-height: 320px;
+  overflow: auto;
+  display: grid;
+  gap: 4px;
+}
+
+.comboOption {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #172033;
+  cursor: pointer;
+  text-align: left;
+}
+
+.comboOption:hover,
+.selectedComboOption {
+  background: #eef3ff;
+  color: #315efb;
+}
+
 .summaryBlock {
   margin-top: 20px;
   padding-top: 20px;

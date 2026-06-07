@@ -103,7 +103,7 @@ The left panel shows:
 
 ### Entry Point / Group selector
 
-Use the combined **Search and select** Entry Point control to filter/select by route, file, kind, rank, or score. The default selected flow is ranked for likely usefulness instead of simple alphabetical order. Entry options show rank/score, and the selected flow header explains the score reasons. Seed/setup flows and empty framework hooks are de-emphasized so product/auth/domain routes are better v1 defaults.
+Use the **Entry Point / Group** combobox to open a dropdown, search inside it, and select by route, file, kind, rank, or score. The default selected flow is ranked for likely usefulness instead of simple alphabetical order. Entry options show rank/score, and the selected flow header explains the score reasons. Seed/setup flows and empty framework hooks are de-emphasized so product/auth/domain routes are better v1 defaults.
 
 The selector includes:
 

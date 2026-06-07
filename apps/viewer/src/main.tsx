@@ -248,32 +248,18 @@ function App() {
 
             <details className="sidebarSection" open>
               <summary>Entry Point / Group</summary>
-              <label className="selectLabel" htmlFor="entryPointSearch">Search and select</label>
-              <input
-                id="entryPointSearch"
-                className="searchInput"
-                type="search"
-                list="entryPointOptions"
-                value={entrySearch || selectedOption?.label || ''}
-                placeholder="Search route, file, kind, score…"
-                onFocus={() => setEntrySearch('')}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setEntrySearch(value);
-                  const selected = selectionOptions.find((option) => option.label === value);
-                  if (selected) {
-                    setSelectedSelectionId(selected.id);
-                    setSelection(null);
-                    setEntrySearch('');
-                  }
+              <SearchableSelectionDropdown
+                options={visibleSelectionOptions}
+                totalCount={selectionOptions.length}
+                selectedOption={selectedOption}
+                query={entrySearch}
+                onQueryChange={setEntrySearch}
+                onSelect={(option) => {
+                  setSelectedSelectionId(option.id);
+                  setSelection(null);
+                  setEntrySearch('');
                 }}
               />
-              <datalist id="entryPointOptions">
-                {visibleSelectionOptions.map((option) => (
-                  <option key={option.id} value={option.label} />
-                ))}
-              </datalist>
-              {entrySearch ? <p className="hint">Showing {visibleSelectionOptions.length} of {selectionOptions.length} option(s).</p> : null}
               {selectedOption?.kind === 'group' ? <GroupSummary option={selectedOption} /> : null}
               {selectedEntryPoint ? <EntryPointSummary entryPoint={selectedEntryPoint} /> : null}
             </details>
@@ -391,6 +377,70 @@ function App() {
         <section className="panel">Loading sample graph…</section>
       )}
     </main>
+  );
+}
+
+function SearchableSelectionDropdown({
+  options,
+  totalCount,
+  selectedOption,
+  query,
+  onQueryChange,
+  onSelect,
+}: {
+  options: FlowSelectionOption[];
+  totalCount: number;
+  selectedOption: FlowSelectionOption | null;
+  query: string;
+  onQueryChange: (query: string) => void;
+  onSelect: (option: FlowSelectionOption) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="comboBox">
+      <button
+        className="comboButton"
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span>{selectedOption?.label ?? 'Select Entry Point / Group'}</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      {isOpen ? (
+        <div className="comboPanel">
+          <label className="selectLabel" htmlFor="entryPointSearch">Search Entry Points / Groups</label>
+          <input
+            id="entryPointSearch"
+            className="searchInput"
+            type="search"
+            value={query}
+            placeholder="Search route, file, kind, score…"
+            autoFocus
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
+          <div className="comboList" role="listbox" aria-label="Entry Point / Group options">
+            {options.length ? options.map((option) => (
+              <button
+                key={option.id}
+                className={`comboOption${selectedOption?.id === option.id ? ' selectedComboOption' : ''}`}
+                type="button"
+                role="option"
+                aria-selected={selectedOption?.id === option.id}
+                onClick={() => {
+                  onSelect(option);
+                  setIsOpen(false);
+                }}
+              >
+                {option.label}
+              </button>
+            )) : <p className="hint">No matching Entry Points.</p>}
+          </div>
+          <p className="hint">Showing {options.length} of {totalCount} option(s).</p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
