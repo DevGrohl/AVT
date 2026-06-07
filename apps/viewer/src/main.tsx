@@ -1353,10 +1353,10 @@ function codeFlowOutcomeModel(
     const id = `viewer:outcome:${marker.id}`;
     const trigger = marker.trigger_condition.expression;
     outcomeById.set(id, { id, type: outcomeType, sourceNodeId: sourceId, marker, trigger });
-    const offsetX = outcomeType === 'error' ? -130 : 145;
+    const offsetX = outcomeType === 'error' ? 0 : 250;
     nodes.push({
       id,
-      position: { x: Math.max(20, sourcePosition.x + offsetX), y: sourcePosition.y + 132 + count * 86 },
+      position: { x: Math.max(20, sourcePosition.x + offsetX), y: sourcePosition.y + 190 + count * 112 },
       data: { label: `${outcomeType === 'error' ? 'Error' : 'Success'} when ${trigger}` },
       type: 'default',
       selectable: true,
@@ -1710,8 +1710,8 @@ function codeFlowPositions(
   for (const [depthKey, depthGroup] of [...byDepth.entries()].sort(([a], [b]) => Number(a) - Number(b))) {
     depthGroup.sort(compareHierarchyNodes).forEach((node, index) => {
       positions.set(node.id, {
-        x: 80 + Number(depthKey) * 300,
-        y: 240 + index * 118,
+        x: 100 + Number(depthKey) * 360,
+        y: 300 + index * 170,
       });
     });
   }
@@ -1728,19 +1728,19 @@ function codeFlowPositions(
       .sort((a, b) => a.id.localeCompare(b.id))
       .forEach((edge, index) => {
         positions.set(edge.target, {
-          x: sourcePosition.x,
-          y: Math.max(20, sourcePosition.y - 126 - index * 86),
+          x: sourcePosition.x + 40 + index * 36,
+          y: Math.max(24, sourcePosition.y - 170 - index * 110),
         });
         positionedExternalIds.add(edge.target);
       });
   }
 
   externalNodes.filter((node) => !positionedExternalIds.has(node.id)).forEach((node, index) => {
-    positions.set(node.id, { x: 80 + index * 250, y: 20 });
+    positions.set(node.id, { x: 100 + index * 280, y: 24 });
   });
 
   nodes.filter((node) => node.kind === 'module' || node.kind === 'class').forEach((node, index) => {
-    positions.set(node.id, { x: 0, y: 1120 + index * 78 });
+    positions.set(node.id, { x: 0, y: 1400 + index * 90 });
   });
   return positions;
 }
