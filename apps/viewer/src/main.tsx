@@ -11,7 +11,7 @@ type InspectorSelection =
   | { type: 'edge'; item: GraphEdge }
   | null;
 
-type DiagramLayout = 'hierarchy-nested' | 'hierarchy-swimlane' | 'hierarchy-outline' | 'layered' | 'circular' | 'grid';
+type DiagramLayout = 'hierarchy-nested' | 'hierarchy-swimlane' | 'hierarchy-outline' | 'code-flow' | 'layered' | 'circular' | 'grid';
 
 type EdgeLabelMode = 'kind' | 'reason' | 'none';
 
@@ -476,6 +476,7 @@ function DiagramLayoutControls({ layout, onChange }: { layout: DiagramLayout; on
         <optgroup label="Experimental alternatives">
           <option value="hierarchy-outline">Outline + focused graph</option>
           <option value="hierarchy-nested">Nested ownership map</option>
+          <option value="code-flow">Code flow paths</option>
           <option value="layered">Layered flow</option>
           <option value="circular">Circular relationships</option>
           <option value="grid">Compact grid</option>
@@ -842,6 +843,7 @@ function layoutDescription(layout: DiagramLayout): string {
   if (layout === 'hierarchy-nested') return 'Nested ownership map: modules/classes are areas that own their functions and methods.';
   if (layout === 'hierarchy-swimlane') return 'Swimlane hierarchy: each module becomes a lane, preserving ownership while reducing overlap.';
   if (layout === 'hierarchy-outline') return 'Outline + focused graph: hierarchy is a compact left outline; behavior flow stays on the main canvas.';
+  if (layout === 'code-flow') return 'Code flow paths: entry/calls move left to right while branch/outcome/external nodes separate into lanes by marker evidence.';
   if (layout === 'layered') return 'Layered flow: call-flow columns with structural context areas when enabled.';
   if (layout === 'circular') return 'Circular: relationship overview for spotting clusters and cycles.';
   return 'Compact grid: dense scan-friendly layout.';
@@ -1196,7 +1198,7 @@ function buildFlowModel(
     markersByNodeId.set(marker.node_id, [...(markersByNodeId.get(marker.node_id) ?? []), marker]);
   }
 
-  const layoutModel = diagramLayoutModel(flowNodes, flowEdges, nodeById, layout, displayOptions.showHierarchyContext);
+  const layoutModel = diagramLayoutModel(flowNodes, flowEdges, nodeById, layout, displayOptions.showHierarchyContext, markersByNodeId);
   const externalLane = externalLaneModel(flowNodes, layoutModel, layout, displayOptions.showHierarchyContext);
   const graphReactFlowNodes = flowNodes.map((node): FlowNode => {
     const externalIndex = externalLane?.externalIds.indexOf(node.id) ?? -1;
@@ -1330,6 +1332,7 @@ function diagramLayoutModel(
   nodeById: Map<string, GraphNode>,
   layout: DiagramLayout,
   showHierarchyContext: boolean,
+  markersByNodeId: Map<string, FlowMarker[]> = new Map(),
 ): DiagramLayoutModel {
   if (layout === 'hierarchy-nested') {
     const positions = hierarchyPositions(nodes, nodeById);
@@ -1340,6 +1343,7 @@ function diagramLayoutModel(
     return showHierarchyContext ? areaLayout(nodes, nodeById, positions) : emptyLayoutModel(positions);
   }
   if (layout === 'hierarchy-outline') return emptyLayoutModel(outlineFocusedPositions(nodes, edges, nodeById));
+  if (layout === 'code-flow') return emptyLayoutModel(codeFlowPositions(nodes, edges, nodeById, markersByNodeId));
   if (layout === 'circular') return emptyLayoutModel(circularPositions(nodes));
   if (layout === 'grid') return emptyLayoutModel(gridPositions(nodes));
   const positions = layeredPositions(nodes, edges, nodeById);
@@ -1499,6 +1503,75 @@ function outlineFocusedPositions(nodes: GraphNode[], edges: GraphEdge[], nodeByI
     positions.set(node.id, { x: position.x + 620, y: position.y });
   }
   return positions;
+}
+
+function codeFlowPositions(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  nodeById: Map<string, GraphNode>,
+  markersByNodeId: Map<string, FlowMarker[]>,
+): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const behaviorNodes = nodes.filter((node) => node.kind !== 'module' && node.kind !== 'class').sort(compareHierarchyNodes);
+  const behaviorIds = new Set(behaviorNodes.map((node) => node.id));
+  const incoming = new Map<string, number>();
+  const outgoing = new Map<string, string[]>();
+
+  for (const node of behaviorNodes) {
+    incoming.set(node.id, 0);
+    outgoing.set(node.id, []);
+  }
+  for (const edge of edges) {
+    if (!behaviorIds.has(edge.source) || !behaviorIds.has(edge.target)) continue;
+    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target]);
+    incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
+  }
+
+  const roots = behaviorNodes.filter((node) => (incoming.get(node.id) ?? 0) === 0 && node.kind !== 'external');
+  const queue = (roots.length ? roots : behaviorNodes.filter((node) => node.kind !== 'external')).map((node) => node.id);
+  const depth = new Map<string, number>();
+  for (const id of queue) depth.set(id, 0);
+
+  while (queue.length) {
+    const id = queue.shift()!;
+    const nextDepth = (depth.get(id) ?? 0) + 1;
+    for (const target of outgoing.get(id) ?? []) {
+      if ((depth.get(target) ?? -1) >= nextDepth) continue;
+      depth.set(target, nextDepth);
+      queue.push(target);
+    }
+  }
+
+  const laneGroups = groupBy(behaviorNodes, (node) => codeFlowLane(node, markersByNodeId.get(node.id) ?? []));
+  const laneOrder = ['entry-call', 'branch', 'loop', 'outcome', 'external', 'other'];
+  const laneBaseY = new Map(laneOrder.map((lane, index) => [lane, index * 240]));
+  for (const lane of laneOrder) {
+    const group = (laneGroups.get(lane) ?? []).sort((a, b) => (depth.get(a.id) ?? fallbackDepth(a, nodeById)) - (depth.get(b.id) ?? fallbackDepth(b, nodeById)) || a.id.localeCompare(b.id));
+    const byDepth = groupBy(group, (node) => String(depth.get(node.id) ?? fallbackDepth(node, nodeById)));
+    for (const [depthKey, depthGroup] of byDepth.entries()) {
+      depthGroup.sort(compareHierarchyNodes).forEach((node, index) => {
+        positions.set(node.id, {
+          x: 80 + Number(depthKey) * 360,
+          y: (laneBaseY.get(lane) ?? 0) + index * 92,
+        });
+      });
+    }
+  }
+
+  nodes.filter((node) => node.kind === 'module' || node.kind === 'class').forEach((node, index) => {
+    positions.set(node.id, { x: 0, y: 1320 + index * 78 });
+  });
+  return positions;
+}
+
+function codeFlowLane(node: GraphNode, markers: FlowMarker[]): string {
+  if (node.kind === 'external') return 'external';
+  const markerKinds = new Set(markers.map((marker) => marker.kind));
+  if (markerKinds.has('conditional') || markerKinds.has('raise')) return 'branch';
+  if (markerKinds.has('loop')) return 'loop';
+  if (markerKinds.has('return')) return 'outcome';
+  if (node.kind === 'function' || node.kind === 'method') return 'entry-call';
+  return 'other';
 }
 
 function layeredPositions(nodes: GraphNode[], edges: GraphEdge[], nodeById: Map<string, GraphNode>): Map<string, { x: number; y: number }> {
