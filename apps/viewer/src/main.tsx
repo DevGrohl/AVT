@@ -1710,12 +1710,12 @@ function codeFlowPositions(
   for (const [depthKey, depthGroup] of [...byDepth.entries()].sort(([a], [b]) => Number(a) - Number(b))) {
     const numericDepth = Number(depthKey);
     const sortedGroup = depthGroup.sort(compareHierarchyNodes);
-    const centerX = 460;
-    const spacingX = 280;
+    const centerX = 380;
+    const spacingX = 310;
     const rowWidth = Math.max(0, (sortedGroup.length - 1) * spacingX);
     sortedGroup.forEach((node, index) => {
       positions.set(node.id, {
-        x: centerX + numericDepth * 70 - rowWidth / 2 + index * spacingX,
+        x: centerX + numericDepth * 230 - rowWidth / 2 + index * spacingX,
         y: 120 + numericDepth * 230,
       });
     });
@@ -1733,15 +1733,15 @@ function codeFlowPositions(
       .sort((a, b) => a.id.localeCompare(b.id))
       .forEach((edge, index) => {
         positions.set(edge.target, {
-          x: sourcePosition.x + 220 + index * 32,
-          y: Math.max(24, sourcePosition.y - 105 - index * 82),
+          x: sourcePosition.x + 360 + (index % 3) * 210,
+          y: Math.max(24, sourcePosition.y - 180 - Math.floor(index / 3) * 100),
         });
         positionedExternalIds.add(edge.target);
       });
   }
 
   externalNodes.filter((node) => !positionedExternalIds.has(node.id)).forEach((node, index) => {
-    positions.set(node.id, { x: 620 + index * 260, y: 24 });
+    positions.set(node.id, { x: 760 + index * 260, y: 24 });
   });
 
   nodes.filter((node) => node.kind === 'module' || node.kind === 'class').forEach((node, index) => {
