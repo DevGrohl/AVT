@@ -313,6 +313,11 @@ function App() {
                     });
                   }}
                 />
+                <DeveloperOnboardingPanel
+                  entryPoint={selectedEntryPoint}
+                  nodes={flowModel.flowNodes}
+                  edges={flowModel.flowEdges}
+                />
                 <div className="graphCanvas" aria-label="Selected Execution Flow graph">
                   <ReactFlow
                     key={`${selectedFlow.id}:${diagramLayout}:${displayOptions.showHierarchyContext}:${displayOptions.showExternalInteractions}:${displayOptions.edgeLabelMode}`}
@@ -595,6 +600,131 @@ function FlowHeader({
       </div>
     </div>
   );
+}
+
+interface FlowOnboardingInfo {
+  summary: string;
+  files: Array<{ path: string; reason: string; score: number }>;
+  breadcrumbs: GraphNode[];
+  externalInteractions: string[];
+}
+
+function DeveloperOnboardingPanel({ entryPoint, nodes, edges }: { entryPoint: EntryPoint | null; nodes: GraphNode[]; edges: GraphEdge[] }) {
+  const info = useMemo(() => buildFlowOnboardingInfo(entryPoint, nodes, edges), [entryPoint, nodes, edges]);
+  return (
+    <section className="onboardingPanel">
+      <div>
+        <h3>Developer onboarding</h3>
+        <p>{info.summary}</p>
+      </div>
+      <div className="onboardingGrid">
+        <section>
+          <h4>Execution breadcrumb</h4>
+          {info.breadcrumbs.length ? (
+            <ol className="breadcrumbList">
+              {info.breadcrumbs.map((node) => (
+                <li key={node.id}><span className={`kind kind-${node.kind}`}>{node.kind}</span>{node.label}</li>
+              ))}
+            </ol>
+          ) : <p className="hint">No readable behavior path found for this flow.</p>}
+        </section>
+        <section>
+          <h4>Files to read next</h4>
+          {info.files.length ? (
+            <ol className="fileReadList">
+              {info.files.slice(0, 6).map((file) => (
+                <li key={file.path}><code>{file.path}</code><p>{file.reason}</p></li>
+              ))}
+            </ol>
+          ) : <p className="hint">No source files found in this flow.</p>}
+        </section>
+        <section>
+          <h4>External/DB interactions</h4>
+          {info.externalInteractions.length ? (
+            <ul className="compactBullets">
+              {info.externalInteractions.slice(0, 8).map((label) => <li key={label}>{label}</li>)}
+            </ul>
+          ) : <p className="hint">No external interactions visible in this flow.</p>}
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function buildFlowOnboardingInfo(entryPoint: EntryPoint | null, nodes: GraphNode[], edges: GraphEdge[]): FlowOnboardingInfo {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const behaviorNodes = nodes.filter((node) => node.kind !== 'module' && node.kind !== 'class');
+  const externalInteractions = sortedUnique(behaviorNodes.filter((node) => node.kind === 'external').map((node) => node.label));
+  const files = rankFlowFiles(entryPoint, behaviorNodes, edges);
+  const breadcrumbs = buildBreadcrumb(entryPoint, behaviorNodes, edges, nodeById);
+  const methods = entryPoint?.http_methods?.join(', ');
+  const route = entryPoint?.route_path;
+  const entryLabel = route ? `${methods || 'ROUTE'} ${route}` : entryPoint?.label ?? 'Selected flow';
+  const sourceCount = files.length;
+  const externalText = externalInteractions.length ? `touches ${externalInteractions.length} external/DB interaction(s)` : 'has no visible external interactions';
+  const summary = `${entryLabel} spans ${sourceCount} source file(s), shows ${edges.length} visible edge(s), and ${externalText}. Start with the files and breadcrumb below before using the diagram for detail.`;
+  return { summary, files, breadcrumbs, externalInteractions };
+}
+
+function rankFlowFiles(entryPoint: EntryPoint | null, nodes: GraphNode[], edges: GraphEdge[]): Array<{ path: string; reason: string; score: number }> {
+  const byPath = new Map<string, { path: string; score: number; reasons: Set<string> }>();
+  const ensure = (path: string) => {
+    const existing = byPath.get(path);
+    if (existing) return existing;
+    const next = { path, score: 0, reasons: new Set<string>() };
+    byPath.set(path, next);
+    return next;
+  };
+  for (const node of nodes) {
+    if (!node.path) continue;
+    const item = ensure(node.path);
+    item.score += node.kind === 'function' || node.kind === 'method' ? 3 : 1;
+    if (node.id === entryPoint?.node_id) {
+      item.score += 20;
+      item.reasons.add('Entry Point handler');
+    } else if (node.kind === 'function' || node.kind === 'method') {
+      item.reasons.add('flow behavior');
+    }
+  }
+  for (const edge of edges) {
+    const path = edge.evidence.location.path;
+    const item = ensure(path);
+    item.score += edge.kind === 'external_interaction' ? 4 : 1;
+    if (edge.kind === 'external_interaction') item.reasons.add('external/DB interaction evidence');
+    if (edge.certainty === 'uncertain') item.reasons.add('uncertainty to review');
+  }
+  return [...byPath.values()]
+    .map((item) => ({ path: item.path, score: item.score, reason: [...item.reasons].slice(0, 3).join(', ') || 'referenced by flow evidence' }))
+    .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+}
+
+function buildBreadcrumb(entryPoint: EntryPoint | null, nodes: GraphNode[], edges: GraphEdge[], nodeById: Map<string, GraphNode>): GraphNode[] {
+  const startId = entryPoint?.node_id ?? nodes.find((node) => node.kind !== 'external')?.id;
+  if (!startId) return [];
+  const outgoing = new Map<string, GraphEdge[]>();
+  for (const edge of edges) outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]);
+  const path: GraphNode[] = [];
+  const seen = new Set<string>();
+  let currentId: string | undefined = startId;
+  while (currentId && !seen.has(currentId) && path.length < 8) {
+    seen.add(currentId);
+    const node = nodeById.get(currentId);
+    if (node && node.kind !== 'module' && node.kind !== 'class') path.push(node);
+    const nextEdge: GraphEdge | undefined = (outgoing.get(currentId) ?? [])
+      .filter((edge) => !seen.has(edge.target))
+      .sort((a, b) => breadcrumbEdgeScore(b, nodeById) - breadcrumbEdgeScore(a, nodeById) || a.id.localeCompare(b.id))[0];
+    currentId = nextEdge?.target;
+  }
+  return path;
+}
+
+function breadcrumbEdgeScore(edge: GraphEdge, nodeById: Map<string, GraphNode>): number {
+  const target = nodeById.get(edge.target);
+  let score = edge.kind === 'external_interaction' ? 2 : 5;
+  if (target?.kind === 'external') score += 1;
+  if (target?.kind === 'function' || target?.kind === 'method') score += 4;
+  if (edge.certainty === 'confirmed') score += 2;
+  return score;
 }
 
 function layoutDescription(layout: DiagramLayout): string {

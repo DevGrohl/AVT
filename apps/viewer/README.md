@@ -113,6 +113,15 @@ Grouped options combine nodes, edges, and markers from all matching Entry Point 
 
 The viewer still avoids rendering the whole project graph by default; it renders the selected Entry Point or selected Entry Point group.
 
+### Developer onboarding panel
+
+Before the diagram, the main panel shows a compact onboarding section for the selected flow:
+
+- a plain-language flow summary;
+- an execution breadcrumb from the Entry Point through likely behavior calls/interactions;
+- files to read next, ranked by handler/behavior/external evidence;
+- visible External/DB interactions.
+
 ### Graph canvas
 
 The main panel renders the selected Execution Flow with React Flow.
