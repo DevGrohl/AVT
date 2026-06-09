@@ -1,5 +1,7 @@
 # AVT
 
+[![](https://badgen.net/static/quality/trust%20me%20bro/3C1)](https://github.com/sebmestrallet/absurd-badges) [![](https://img.shields.io/badge/coverage-not%20much-F73)](https://github.com/sebmestrallet/absurd-badges)
+
 AVT is an **Architecture Visualizer Tool** for helping Developers understand unfamiliar Python projects through **Execution Flow Graphs**.
 
 Phase 1 focuses on a local/static workflow:
@@ -155,18 +157,18 @@ uv run --project packages/analyzer avt analyze <path> [options]
 
 Options summary:
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `<path>` | directory | Project directory to analyze. Must exist and be a directory. |
-| `--out` | path | Output graph JSON file path. Defaults to `avt-graph.json` in the current directory when `--output` is omitted. |
-| `--input` | absolute path | Absolute project directory to analyze; alternative to positional `<path>`. |
-| `--output` | folder path | Folder for all parsing results: `graph.json`, `summary.json`, `warnings.json`, `entrypoints.json`. Cannot be combined with `--out`. |
-| `--entry` | `path.py:qualified.name` | Manual Entry Point. May be passed multiple times. |
-| `--list-entrypoints` | flag | Print discovered Entry Points and summary without writing graph JSON. |
-| `--overlay` | path | Analysis Overlay JSON path. Defaults to `<project>/.avt/overlay.json` when present. |
-| `--no-timestamp` | flag | Omit `metadata.generated_at` for reproducible output. |
-| `--include-tests` | flag | Include tests that are excluded by default. |
-| `--max-depth` | integer | Maximum call traversal depth. Defaults to `6`. |
+| Option               | Value                    | Description                                                                                                                         |
+| -------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `<path>`             | directory                | Project directory to analyze. Must exist and be a directory.                                                                        |
+| `--out`              | path                     | Output graph JSON file path. Defaults to `avt-graph.json` in the current directory when `--output` is omitted.                      |
+| `--input`            | absolute path            | Absolute project directory to analyze; alternative to positional `<path>`.                                                          |
+| `--output`           | folder path              | Folder for all parsing results: `graph.json`, `summary.json`, `warnings.json`, `entrypoints.json`. Cannot be combined with `--out`. |
+| `--entry`            | `path.py:qualified.name` | Manual Entry Point. May be passed multiple times.                                                                                   |
+| `--list-entrypoints` | flag                     | Print discovered Entry Points and summary without writing graph JSON.                                                               |
+| `--overlay`          | path                     | Analysis Overlay JSON path. Defaults to `<project>/.avt/overlay.json` when present.                                                 |
+| `--no-timestamp`     | flag                     | Omit `metadata.generated_at` for reproducible output.                                                                               |
+| `--include-tests`    | flag                     | Include tests that are excluded by default.                                                                                         |
+| `--max-depth`        | integer                  | Maximum call traversal depth. Defaults to `6`.                                                                                      |
 
 See `packages/analyzer/README.md` for full analyzer documentation.
 
@@ -212,8 +214,8 @@ Example:
 ```json
 {
   "edge_resolutions": [
-    {"edge_id": "edge:...", "certainty": "confirmed"},
-    {"edge_id": "edge:...", "certainty": "rejected"}
+    { "edge_id": "edge:...", "certainty": "confirmed" },
+    { "edge_id": "edge:...", "certainty": "rejected" }
   ]
 }
 ```
