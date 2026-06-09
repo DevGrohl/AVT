@@ -33,5 +33,5 @@ Pi task tracking writes local state under `.pi/tasks/`. This is local agent/sess
 ## Documentation rules
 
 - Keep `CONTEXT.md` as glossary/domain language only; no implementation details.
-- Put implementation plans in `docs/restart-plan.md` or focused docs under `docs/`.
-- Use ADRs sparingly for hard-to-reverse, surprising trade-off decisions.
+- Keep repo docs focused on developer usage, local development, and supported schemas.
+- Move planning notes, validation logs, ADRs, experimental write-ups, and agentic-session artifacts to the project vault instead of committing them under `docs/`.

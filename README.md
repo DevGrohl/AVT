@@ -136,7 +136,7 @@ Known limitations:
 - whole-program call graphs are approximate;
 - dynamic dispatch, dependency injection, and framework magic may produce uncertain or missing edges;
 - likely ORM/external heuristics can be noisy and should be corrected with overlays when needed;
-- broad multi-language support is future work, documented in `docs/future-lsp-multilanguage-plan.md`;
+- broad multi-language support is future work and not part of v1;
 - target projects are read-only inputs: AVT does not modify source repositories during analysis.
 
 ## Analyzer CLI
@@ -270,14 +270,10 @@ AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
 
 ## Documentation
 
+Developer-facing docs are intentionally limited to project usage and local development:
+
 - `CONTEXT.md` — project language/glossary.
-- `docs/restart-plan.md` — Phase 1 restart plan.
 - `docs/v1-onboarding-demo.md` — v1 onboarding workflow and acceptance criteria.
-- `docs/phase2-llm-guide-plan.md` — Phase 2 LLM Guide plan.
 - `docs/analysis-overlay.md` — Analysis Overlay schema and confirm/reject round trip.
 - `docs/layout-overlay.md` — viewer layout overlay schema.
-- `docs/future-lsp-multilanguage-plan.md` — future LSP-assisted multi-language architecture plan.
-- `docs/experimental-code-flow-layout.md` — experimental Code Flow layout and trigger-condition outcome design.
 - `docs/development.md` — local development commands.
-- `docs/adr/` — architecture decisions.
-- `docs/validation/` — validation notes and QA artifacts, including Phase 2 Guide validation.

@@ -11,7 +11,7 @@ The viewer runs entirely in the browser. It does not require a backend and does 
 - TypeScript
 - React Flow (`@xyflow/react`)
 
-Visualization choice is documented in `docs/adr/0003-use-react-flow-for-phase-1-viewer.md`.
+React Flow is the current viewer graph renderer.
 
 ## Install
 
@@ -274,14 +274,18 @@ Not implemented yet:
 
 ## QA
 
-Headless real-graph QA is documented at:
+Run the smoke test from `apps/viewer`:
 
-- `docs/validation/viewer-real-graph-qa.md`
+```sh
+npm run smoke
+```
 
-Artifacts:
+For a realistic demo graph, run from the repository root:
 
-- `docs/validation/artifacts/viewer-real-graph-dom.html`
-- `docs/validation/artifacts/viewer-real-graph.png`
+```sh
+AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
+  scripts/smoke-v1-demo-api-viewer.sh /tmp/avt-demo-api-v1.json
+```
 
 ## Development notes
 

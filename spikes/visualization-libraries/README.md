@@ -108,4 +108,4 @@ Rationale:
 - It supports the near-term interaction model: inspector, filters, hierarchy context, marker/external styling, and overlay export.
 - Cytoscape.js remains the fallback if whole-project graph exploration becomes the dominant UX.
 
-Decision captured in `docs/adr/0003-use-react-flow-for-phase-1-viewer.md`.
+Decision summary: React Flow is the preferred renderer for AVT's current selected-flow viewer; Cytoscape.js remains a fallback if whole-project graph exploration becomes the dominant UX.
