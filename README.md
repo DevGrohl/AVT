@@ -9,6 +9,8 @@ Phase 1 focuses on a local/static workflow:
 3. Open the JSON in the static/local viewer.
 4. Explore Entry Points, calls, External Interactions, Flow Markers, warnings, and uncertainty.
 
+![AVT viewer showing a generic hiring-process demo API flow](docs/assets/avt-viewer-demo.png)
+
 ## Current status
 
 AVT is converging on a **v1 onboarding workflow** for unfamiliar Python API/backend repositories:
