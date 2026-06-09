@@ -1,17 +1,19 @@
-# V1 Usefulness Review: RealtorCareersAPI
+# V1 Usefulness Review: Generic Hiring-Process Demo API
 
 Date: 2026-06-06
 
-Target project: `/mnt/shared/Documents/Projects/RealtorCareersAPI`
+Target project: `/path/to/hiring-process-demo-api`
+
+The target is only a demo project: a generic hiring-process API used to validate AVT against a realistic backend graph.
 
 Graph generated with:
 
 ```sh
 uv run --project packages/analyzer avt analyze \
-  /mnt/shared/Documents/Projects/RealtorCareersAPI \
+  /path/to/hiring-process-demo-api \
   --no-timestamp \
-  --out /tmp/avt-realtor-v1.json
-python -m json.tool /tmp/avt-realtor-v1.json >/dev/null
+  --out /tmp/avt-demo-api-v1.json
+python -m json.tool /tmp/avt-demo-api-v1.json >/dev/null
 ```
 
 ## Summary
@@ -123,8 +125,8 @@ Before calling v1 useful:
 2. Penalize zero-edge framework hooks.
 3. Add explicit rank/reason display in the viewer so users understand why a flow is first.
 4. Tighten likely ORM External Interaction heuristics to reduce labels like `database: router.delete`.
-5. Add a real-graph viewer smoke fixture so the standard Realtor-style graph cannot blank.
+5. Add a real-graph viewer smoke fixture so the standard demo-API-style graph cannot blank.
 
 ## Verdict
 
-AVT is close to v1-useful for RealtorCareersAPI. The top 10 flows are mostly meaningful, but the default first flow should be improved before the v1 demo. The most useful initial flow today is likely `POST /api/users/token` or `POST /api/applications/toggle`, not `POST /api/seed/seed`.
+AVT is close to v1-useful for generic hiring-process demo API. The top 10 flows are mostly meaningful, but the default first flow should be improved before the v1 demo. The most useful initial flow today is likely `POST /api/users/token` or `POST /api/applications/toggle`, not `POST /api/seed/seed`.

@@ -88,7 +88,7 @@ avt analyze /path/to/project --with-guide --out /tmp/avt-graph.json
 4. Add `guide-entrypoints` CLI command that writes suggestions only. ✅ static baseline provider
 5. Add analyzer support for validated Guide suggestions as manual Entry Points. ✅ invalid suggestions become warnings; duplicates are skipped
 6. Show Guide suggestions and reasons in the viewer. ✅ guide JSON side panel
-7. Validate on RealtorCareersAPI and compare against static discovery. ✅ initial static baseline
+7. Validate on generic hiring-process demo API and compare against static discovery. ✅ initial static baseline
 
 ## Phase 2 Slice 2 Status
 
@@ -117,16 +117,16 @@ Implemented first foundation slice:
 - already-discovered suggestions skipped to avoid duplicate flows
 - deterministic static usefulness ranking for framework hooks, auth/session flows, non-CRUD routes, mutating routes, and richer flows
 
-RealtorCareersAPI baseline:
+Generic hiring-process demo API baseline:
 
 - 62 files scanned
 - 55 static Entry Points found
 - 10 baseline Guide suggestions written
 - applying the baseline Guide keeps 55 Entry Points/flows because all baseline suggestions are already statically discovered
 
-## RealtorCareersAPI validation focus
+## Generic hiring-process demo API validation focus
 
-Use RealtorCareersAPI as the primary Phase 2 target:
+Use a generic hiring-process demo API as the primary Phase 2 target. This is only a demo project used for realistic validation:
 
 - Does the Guide identify route groups worth inspecting first?
 - Does it call out framework hooks such as lifespan/middleware?
@@ -139,6 +139,6 @@ Use RealtorCareersAPI as the primary Phase 2 target:
 - Guide suggestions can be generated without modifying target projects.
 - Suggestions are stored as JSON and validated before graph use.
 - Invalid suggestions are reported as warnings.
-- RealtorCareersAPI guide output identifies at least three useful flows with reasons.
+- The generic hiring-process demo API guide output identifies at least three useful flows with reasons.
 - Analyzer tests pass.
 - Viewer build passes.

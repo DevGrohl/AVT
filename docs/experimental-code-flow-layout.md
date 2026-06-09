@@ -104,10 +104,11 @@ Clicking an outcome node opens an inspector showing:
 ```sh
 uv run --project packages/analyzer python -m unittest discover packages/analyzer/tests
 cd apps/viewer && npm run smoke
-scripts/smoke-v1-realtor-viewer.sh /tmp/avt-realtor-v1.json
+AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
+  scripts/smoke-v1-demo-api-viewer.sh /tmp/avt-demo-api-v1.json
 ```
 
-On RealtorCareersAPI, the experiment produced trigger-conditioned outcome markers such as:
+On generic hiring-process demo API, the experiment produced trigger-conditioned outcome markers such as:
 
 - `not account`;
 - `not user`;

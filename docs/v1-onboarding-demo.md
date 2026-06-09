@@ -4,7 +4,7 @@ AVT v1 should make one workflow useful and reliable:
 
 > Open an unfamiliar Python API/backend repository, identify the important execution flows, inspect route/service/database/external interactions, and correct uncertain edges without modifying the target project.
 
-The primary validation target is `/mnt/shared/Documents/Projects/RealtorCareersAPI`. `wiki-flex` remains a small Django/DRF regression target, not the main usefulness benchmark.
+The primary validation target is a local fixture/check-out of a generic hiring-process demo API. It is only a demo project for realistic FastAPI/backend validation. `wiki-flex` remains a small Django/DRF regression target, not the main usefulness benchmark.
 
 ## V1 Scope
 
@@ -38,7 +38,8 @@ The primary validation target is `/mnt/shared/Documents/Projects/RealtorCareersA
 From the AVT repo root:
 
 ```sh
-scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
+AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
+  scripts/generate-v1-demo-api-graph.sh /tmp/avt-demo-api-v1.json
 
 cd apps/viewer
 npm install
@@ -49,15 +50,15 @@ Equivalent raw analyzer command:
 
 ```sh
 uv run --project packages/analyzer avt analyze \
-  /mnt/shared/Documents/Projects/RealtorCareersAPI \
+  /absolute/path/to/hiring-process-demo-api \
   --no-timestamp \
-  --out /tmp/avt-realtor-v1.json
-python -m json.tool /tmp/avt-realtor-v1.json >/dev/null
+  --out /tmp/avt-demo-api-v1.json
+python -m json.tool /tmp/avt-demo-api-v1.json >/dev/null
 ```
 
-Set `AVT_REALTOR_TARGET=/absolute/path/to/RealtorCareersAPI` if the validation target lives elsewhere.
+Set `AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api` before using the helper script.
 
-Open the printed viewer URL, then load `/tmp/avt-realtor-v1.json` with **Load graph JSON**.
+Open the printed viewer URL, then load `/tmp/avt-demo-api-v1.json` with **Load graph JSON**.
 
 ## Expected User Outcome
 
@@ -76,7 +77,7 @@ V1 is accepted when all criteria are true.
 
 ### Analyzer criteria
 
-- [ ] RealtorCareersAPI analysis completes without modifying the target repo.
+- [ ] generic hiring-process demo API analysis completes without modifying the target repo.
 - [ ] Generated graph JSON is valid JSON.
 - [ ] Graph contains at least one FastAPI route Entry Point.
 - [ ] Graph contains composed route paths including router prefixes.
@@ -106,7 +107,7 @@ V1 is accepted when all criteria are true.
 
 ### Usefulness criteria
 
-- [ ] Top 5 RealtorCareersAPI flows include meaningful onboarding candidates.
+- [ ] Top 5 generic hiring-process demo API flows include meaningful onboarding candidates.
 - [ ] At least one top flow demonstrates route -> service/helper -> ORM/external/context interaction.
 - [ ] A human can inspect a selected top flow and name the likely source files to read next.
 - [ ] False positives can be corrected via overlay instead of source changes.
@@ -116,7 +117,7 @@ V1 is accepted when all criteria are true.
 V1 is not accepted if:
 
 - the viewer can blank out while loading the standard v1 graph;
-- a v1 workflow requires editing RealtorCareersAPI source code;
+- a v1 workflow requires editing generic hiring-process demo API source code;
 - the graph is dominated by low-value helper functions instead of Entry Points;
 - LLM Guide output is required to get useful baseline results;
 - a visual experiment such as resizing can break the default graph path.
@@ -127,16 +128,18 @@ V1 is not accepted if:
 # Analyzer tests
 uv run --project packages/analyzer python -m unittest discover packages/analyzer/tests
 
-# RealtorCareersAPI graph and sanity checks
-scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
+# Generic hiring-process demo API graph and sanity checks
+AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
+  scripts/generate-v1-demo-api-graph.sh /tmp/avt-demo-api-v1.json
 
 # Viewer smoke with bundled sample graph
 cd apps/viewer
 npm run smoke
 cd ../..
 
-# Viewer smoke with RealtorCareersAPI v1 graph
-scripts/smoke-v1-realtor-viewer.sh /tmp/avt-realtor-v1.json
+# Viewer smoke with generic hiring-process demo API v1 graph
+AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
+  scripts/smoke-v1-demo-api-viewer.sh /tmp/avt-demo-api-v1.json
 ```
 
 ## Decision

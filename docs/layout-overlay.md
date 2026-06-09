@@ -18,7 +18,7 @@ The viewer can also load/export layout overlays from any JSON file.
 {
   "kind": "avt-layout-overlay",
   "version": 1,
-  "project_name": "RealtorCareersAPI",
+  "project_name": "generic hiring-process demo API",
   "positions": {
     "flow:entry:web_route:app/api/endpoints/users.py:login_for_access_token:19:hierarchy-swimlane:context=true:external=true:labels=kind": {
       "node:function:app/api/endpoints/users.py:login_for_access_token": { "x": 640, "y": 120 }

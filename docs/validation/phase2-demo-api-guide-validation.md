@@ -1,12 +1,12 @@
-# Phase 2 RealtorCareersAPI Guide Validation
+# Phase 2 Generic Hiring-Process Demo API Guide Validation
 
 Date: 2026-06-05
 
-Target repository: `/mnt/shared/Documents/Projects/RealtorCareersAPI`
+Target repository: `/path/to/hiring-process-demo-api`
 
 ## Purpose
 
-Validate the first Phase 2 Guide workflow against the primary realistic AVT validation target.
+Validate the first Phase 2 Guide workflow against a generic hiring-process demo API. This is only a demo project used as a realistic AVT validation target.
 
 This validation uses the built-in `static` Guide provider because no Guide API key was configured in the environment during this run. The provider adapter for OpenAI-compatible APIs is implemented, but was not exercised here.
 
@@ -14,14 +14,14 @@ This validation uses the built-in `static` Guide provider because no Guide API k
 
 ```sh
 uv run --project packages/analyzer avt guide-entrypoints \
-  /mnt/shared/Documents/Projects/RealtorCareersAPI \
-  --out /tmp/avt-realtor-guide.json
+  /path/to/hiring-process-demo-api \
+  --out /tmp/avt-demo-api-guide.json
 
 uv run --project packages/analyzer avt analyze \
-  /mnt/shared/Documents/Projects/RealtorCareersAPI \
-  --guide /tmp/avt-realtor-guide.json \
+  /path/to/hiring-process-demo-api \
+  --guide /tmp/avt-demo-api-guide.json \
   --no-timestamp \
-  --out /tmp/avt-realtor-p2.json
+  --out /tmp/avt-demo-api-p2.json
 ```
 
 ## Results

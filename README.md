@@ -32,7 +32,7 @@ Implemented core capabilities:
 - Analysis Overlay loading/export workflow for confirming/rejecting Uncertain Edges.
 - Output-safety warnings for secret-looking literals and environment variable references.
 - React Flow static/local viewer with v1 stable swimlane layout.
-- Headless browser smoke tests, including a RealtorCareersAPI v1 graph smoke path.
+- Headless browser smoke tests, including a generic hiring-process demo API v1 graph smoke path.
 
 ## Monorepo layout
 
@@ -45,27 +45,21 @@ spikes/visualization-libraries/ Visualization library comparison spike
 
 ## Quickstart
 
-### V1 demo: RealtorCareersAPI
+### V1 demo: generic hiring-process demo API
 
-The primary realistic validation target is `/mnt/shared/Documents/Projects/RealtorCareersAPI`.
+The v1 demo target is a local fixture/check-out of a generic hiring-process API. This target is only a demo project used to validate AVT against a realistic FastAPI backend shape.
 
 From the AVT repository root:
 
 ```sh
-scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
+AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
+  scripts/generate-v1-demo-api-graph.sh /tmp/avt-demo-api-v1.json
 cd apps/viewer
 npm install
 npm run dev
 ```
 
-Open the printed local URL and use **Load graph JSON** to select `/tmp/avt-realtor-v1.json`.
-
-If RealtorCareersAPI is elsewhere:
-
-```sh
-AVT_REALTOR_TARGET=/absolute/path/to/RealtorCareersAPI \
-  scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
-```
+Open the printed local URL and use **Load graph JSON** to select `/tmp/avt-demo-api-v1.json`.
 
 ### Analyze any local Python project
 
@@ -85,8 +79,9 @@ uv run --project packages/analyzer avt analyze --input /absolute/path/to/repo --
 Useful variants:
 
 ```sh
-# Generate the v1 RealtorCareersAPI validation graph and run sanity checks
-scripts/generate-v1-realtor-graph.sh /tmp/avt-realtor-v1.json
+# Generate the v1 generic hiring-process demo API validation graph and run sanity checks
+AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
+  scripts/generate-v1-demo-api-graph.sh /tmp/avt-demo-api-v1.json
 
 # List discovered Entry Points only
 uv run --project packages/analyzer avt analyze . --list-entrypoints
@@ -260,10 +255,11 @@ npm run build
 npm run smoke
 ```
 
-Full v1 browser smoke with RealtorCareersAPI graph:
+Full v1 browser smoke with generic hiring-process demo API graph:
 
 ```sh
-scripts/smoke-v1-realtor-viewer.sh /tmp/avt-realtor-v1.json
+AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api \
+  scripts/smoke-v1-demo-api-viewer.sh /tmp/avt-demo-api-v1.json
 ```
 
 ## Documentation

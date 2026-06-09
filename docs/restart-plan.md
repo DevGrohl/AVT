@@ -150,7 +150,7 @@ Confirmed calls should be correct when spot-checked. No percentage accuracy targ
 
 As of 2026-06-05, Phase 1 is ready to transition into Phase 2 planning/implementation:
 
-- RealtorCareersAPI is the primary realistic validation target.
+- A generic hiring-process demo API is the primary realistic validation target; it is only a demo project.
 - Static discovery finds web routes, framework hooks, CLI commands, scripts, route metadata, FastAPI router prefixes, and FastAPI dependency aliases.
 - The viewer supports selected flows/groups, multiple diagram layouts, diagram handling controls, edge filters, and node/edge inspection.
 - Analyzer tests and viewer builds are passing.

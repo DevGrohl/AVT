@@ -1,21 +1,21 @@
-# RealtorCareersAPI Validation
+# Generic Hiring-Process Demo API Validation
 
 Date: 2026-06-05
 
-Target repository: `/mnt/shared/Documents/Projects/RealtorCareersAPI`
+Target repository: `/path/to/hiring-process-demo-api`
 
 ## Purpose
 
-Use RealtorCareersAPI as AVT's primary realistic Phase 1 validation target. It is larger and more behavior-rich than Wiki-Flex, with FastAPI endpoints, service modules, SQLAlchemy/database calls, seeding code, authentication, and validators.
+Use a generic hiring-process demo API as AVT's primary realistic Phase 1 validation target. This is only a demo project, but it is larger and more behavior-rich than Wiki-Flex, with FastAPI endpoints, service modules, SQLAlchemy/database calls, seeding code, authentication, and validators.
 
 Wiki-Flex remains a small Django REST Framework regression case, not the main usefulness target.
 
 ## Commands run
 
 ```sh
-uv run --project packages/analyzer avt analyze /mnt/shared/Documents/Projects/RealtorCareersAPI --list-entrypoints --no-timestamp
-uv run --project packages/analyzer avt analyze /mnt/shared/Documents/Projects/RealtorCareersAPI --no-timestamp --out /tmp/avt-realtor.json
-python -m json.tool /tmp/avt-realtor.json >/dev/null
+uv run --project packages/analyzer avt analyze /path/to/hiring-process-demo-api --list-entrypoints --no-timestamp
+uv run --project packages/analyzer avt analyze /path/to/hiring-process-demo-api --no-timestamp --out /tmp/avt-demo-api.json
+python -m json.tool /tmp/avt-demo-api.json >/dev/null
 ```
 
 ## Results
@@ -118,7 +118,7 @@ Validation showed that endpoint labels were less useful than they should be beca
 - `route_path`, e.g. `/api/positions`, `/api/positions/{id}`, `/api/applications/toggle`
 - labels such as `POST /api/positions: app/api/endpoints/position.py:create_position`
 
-For RealtorCareersAPI, all FastAPI decorator Entry Points now show method/path metadata in the graph and viewer. AVT composes common `APIRouter(prefix=...)` and `include_router(..., prefix=...)` prefixes, so route labels match the visible API surface more closely.
+For generic hiring-process demo API, all FastAPI decorator Entry Points now show method/path metadata in the graph and viewer. AVT composes common `APIRouter(prefix=...)` and `include_router(..., prefix=...)` prefixes, so route labels match the visible API surface more closely.
 
 ## FastAPI dependency resolution hardening
 
@@ -134,17 +134,17 @@ Observed dependency edges after the fix:
 
 This makes authentication/session setup visible in protected endpoint flows.
 
-AVT also resolves imported dependency aliases such as RealtorCareersAPI's `SessionDep = Annotated[AsyncSession, Depends(get_session)]`. This added 56 `fastapi_dependency_alias_call` edges, making database session setup visible across CRUD endpoint flows without requiring any target-project changes.
+AVT also resolves imported dependency aliases such as generic hiring-process demo API's `SessionDep = Annotated[AsyncSession, Depends(get_session)]`. This added 56 `fastapi_dependency_alias_call` edges, making database session setup visible across CRUD endpoint flows without requiring any target-project changes.
 
 ## Framework hook discovery
 
-RealtorCareersAPI has important FastAPI behavior outside route functions:
+generic hiring-process demo API has important FastAPI behavior outside route functions:
 
 - `lifespan` initializes the database connection during app startup.
 - `validation_exception_handler` controls request validation error responses.
 - `log_requests` wraps all HTTP requests as middleware.
 
-AVT now discovers these as `framework_hook` Entry Points. RealtorCareersAPI gained 3 Entry Points/flows for these hooks, making request/application lifecycle behavior visible without changing the target project.
+AVT now discovers these as `framework_hook` Entry Points. generic hiring-process demo API gained 3 Entry Points/flows for these hooks, making request/application lifecycle behavior visible without changing the target project.
 
 ## Follow-up validation questions
 
@@ -155,4 +155,4 @@ AVT now discovers these as `framework_hook` Entry Points. RealtorCareersAPI gain
 
 ## Verdict
 
-RealtorCareersAPI is the right primary validation target for AVT Phase 1. It produces a non-trivial graph with many Entry Points, confirmed service/method edges, External Interactions, and Flow Markers. Future usefulness hardening should start here before using smaller projects as regression cases.
+generic hiring-process demo API is the right primary validation target for AVT Phase 1. It produces a non-trivial graph with many Entry Points, confirmed service/method edges, External Interactions, and Flow Markers. Future usefulness hardening should start here before using smaller projects as regression cases.

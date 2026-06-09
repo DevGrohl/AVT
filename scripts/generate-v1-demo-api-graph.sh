@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TARGET="${AVT_REALTOR_TARGET:-/mnt/shared/Documents/Projects/RealtorCareersAPI}"
-OUT="${1:-/tmp/avt-realtor-v1.json}"
+TARGET="${AVT_DEMO_API_TARGET:-}"
+OUT="${1:-/tmp/avt-demo-api-v1.json}"
 
-if [[ ! -d "$TARGET" ]]; then
-  echo "RealtorCareersAPI target not found: $TARGET" >&2
-  echo "Set AVT_REALTOR_TARGET=/absolute/path/to/RealtorCareersAPI" >&2
+if [[ -z "$TARGET" || ! -d "$TARGET" ]]; then
+  echo "Generic hiring-process demo API target not found: ${TARGET:-<unset>}" >&2
+  echo "Set AVT_DEMO_API_TARGET=/absolute/path/to/hiring-process-demo-api" >&2
+  echo "This target is only a demo project used for realistic AVT validation." >&2
   exit 2
 fi
 
@@ -51,12 +52,12 @@ checks = [
 
 failures = [message for ok, message in checks if not ok]
 if failures:
-    print("V1 Realtor graph regression failed:", file=sys.stderr)
+    print("V1 demo API graph regression failed:", file=sys.stderr)
     for failure in failures:
         print(f"- {failure}", file=sys.stderr)
     raise SystemExit(1)
 
-print("V1 Realtor graph regression passed")
+print("V1 demo API graph regression passed")
 print(f"Graph: {path}")
 print(f"Entry Points: {len(entry_points)}")
 print(f"Flows: {len(flows)}")
