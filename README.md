@@ -11,6 +11,10 @@ Phase 1 focuses on a local/static workflow:
 
 ![AVT viewer showing a generic hiring-process demo API flow](docs/assets/avt-viewer-demo.png)
 
+Code flow example:
+
+![AVT code flow example](docs/assets/avt-code-flow-example.png)
+
 ## Current status
 
 AVT is converging on a **v1 onboarding workflow** for unfamiliar Python API/backend repositories:
