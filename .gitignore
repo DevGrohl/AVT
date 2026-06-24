@@ -12,6 +12,7 @@ build/
 
 # Pi local task/session state
 .pi/tasks/
+.superpowers/
 
 # Local git worktrees
 .worktrees/
